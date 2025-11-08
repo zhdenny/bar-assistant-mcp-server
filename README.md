@@ -1,12 +1,12 @@
-# Bar Assistant MCP Server# Bar Assistant MCP Server# Bar Assistant MCP Server
-
+# Bar Assistant MCP Server
 
 
 A high-performance Model Context Protocol (MCP) server that provides intelligent cocktail search and recipe retrieval from [Bar Assistant](https://github.com/karlomikus/bar-assistant) instances.
 
 
+## Features
 
-## FeaturesA high-performance Model Context Protocol (MCP) server that provides intelligent cocktail search and recipe retrieval with advanced batch processing capabilities.A Model Context Protocol (MCP) server that integrates with Bar Assistant, enabling natural language interactions with your cocktail database through AI assistants like GitHub Copilot.
+A high-performance Model Context Protocol (MCP) server that provides intelligent cocktail search and recipe retrieval with advanced batch processing capabilities.A Model Context Protocol (MCP) server that integrates with Bar Assistant, enabling natural language interactions with your cocktail database through AI assistants like GitHub Copilot.
 
 
 

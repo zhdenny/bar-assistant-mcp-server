@@ -1331,6 +1331,8 @@ Returns detailed ingredient information including:
     });
   }
 
+
+
   // Tool handler methods
   private async handleSearchCocktails(args: SearchCocktailsParams) {
     const results = await this.barClient.searchCocktails(args);
@@ -2490,6 +2492,10 @@ Returns detailed ingredient information including:
         return;
       }
       await transport.handlePostMessage(req, res);
+    });
+
+    app.get('/debug', (req: Request, res: Response) => {
+      res.json(process.env);
     });
 
     app.listen(port, () => {

@@ -1,0 +1,17 @@
+services:
+  bar-assistant-mcp-server:
+    image: bar-assistant-mcp-server:latest
+    container_name: bar-assistant-mcp-server
+    command: npm start -- --sse
+    restart: unless-stopped
+    ports:
+      - "3001:3001"
+    env_file:
+      - ./.env
+    # Optionally, you can add a healthcheck
+    # healthcheck:
+    #   test: ["CMD", "curl", "-f", "http://localhost:3001/health"]
+    #   interval: 30s
+    #   timeout: 10s
+    #   retries: 3
+    #   start_period: 20s

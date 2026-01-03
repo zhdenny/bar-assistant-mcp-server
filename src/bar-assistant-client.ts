@@ -28,7 +28,7 @@ export class BarAssistantClient {
       baseURL: config.baseUrl,
       timeout: config.timeout || 30000,
       headers: {
-        'Authorization': `Bearer ${config.token}`,
+        'Authorization': `Bearer ${config.token.replace(/\s/g, '')}`,
         'Content-Type': 'application/json',
         'Accept': 'application/json',
         'Bar-Assistant-Bar-Id': config.barId || '1', // Default bar ID
@@ -38,7 +38,6 @@ export class BarAssistantClient {
     // Add request/response interceptors for logging and error handling
     this.client.interceptors.request.use(
       (config) => {
-        // API logging disabled to prevent MCP protocol interference
         return config;
       },
       (error) => Promise.reject(error)

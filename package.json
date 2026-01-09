@@ -2,11 +2,11 @@
   "name": "bar-assistant-mcp-server",
   "version": "1.0.0",
   "description": "High-performance MCP Server for Bar Assistant - intelligent cocktail search and recipe retrieval",
-  "main": "dist/src/bar-assistant-mcp-server.js",
+  "main": "dist/bar-assistant-mcp-server.js",
   "type": "module",
   "scripts": {
     "build": "tsc",
-    "start": "node dist/src/bar-assistant-mcp-server.js",
+    "start": "node dist/bar-assistant-mcp-server.js",
     "dev": "tsc --watch",
     "test": "npm run build && node dist/test/run-tests.js",
     "test:negroni": "npm run build && node dist/test/run-tests.js negroni",

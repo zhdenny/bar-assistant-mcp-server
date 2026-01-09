@@ -523,7 +523,7 @@ class BarAssistantMCPServer {
     // Get similar cocktails using the existing method
     if (cocktailId) {
       try {
-        return await this.handleFindSimilarCocktails({ cocktail_id: cocktailId, limit: args.limit || 5 });
+        return await this.handleFindSimilarCocktails({ cocktail_id: cocktailId, limit: args.limit || 5 }, startTime);
       } catch (error) {
         // If similarity search fails, fallback to regular search
         if (args.similar_to) {
@@ -977,99 +977,7 @@ Returns structured data with complete recipes including:
                 },
               },
             },
-            outputSchema: {
-              type: 'object',
-              description: '🎯 Batch processing response with complete cocktail data and performance metrics',
-              properties: {
-                search_results: {
-                  type: 'object',
-                  properties: {
-                    total_found: { 
-                      type: 'number',
-                      description: 'Total cocktails found matching criteria' 
-                    },
-                    returned: { 
-                      type: 'number',
-                      description: 'Number of cocktails returned (limited by batch size)' 
-                    },
-                    search_type: { 
-                      type: 'string',
-                      description: 'Type of search performed (query, similarity, ingredient, etc.)' 
-                    }
-                  }
-                },
-                cocktails: {
-                  type: 'array',
-                  description: 'Complete cocktail recipes with full details',
-                  items: {
-                    type: 'object',
-                    properties: {
-                      id: { type: 'number' },
-                      name: { type: 'string' },
-                      description: { type: 'string' },
-                      ingredients: {
-                        type: 'array',
-                        items: {
-                          type: 'object',
-                          properties: {
-                            name: { type: 'string' },
-                            formatted: { type: 'string', description: 'Human-readable amount with units' },
-                            amount: { type: 'string' },
-                            optional: { type: 'boolean' }
-                          }
-                        }
-                      },
-                      instructions: {
-                        type: 'array',
-                        items: {
-                          type: 'object',
-                          properties: {
-                            step: { type: 'number' },
-                            instruction: { type: 'string' }
-                          }
-                        }
-                      },
-                      details: {
-                        type: 'object',
-                        properties: {
-                          abv: { type: 'number', description: 'Alcohol by volume percentage' },
-                          glass: { type: 'string', description: 'Recommended glassware' },
-                          method: { type: 'string', description: 'Preparation method' },
-                          garnish: { type: 'string', description: 'Garnish instructions' },
-                          direct_link: { type: 'string', description: 'URL to full recipe page' },
-                          tags: { type: 'array', items: { type: 'string' } }
-                        }
-                      }
-                    }
-                  }
-                },
-                similar_cocktails: {
-                  type: 'array',
-                  description: 'Additional similar cocktails (when using similarity search)',
-                  items: { $ref: '#/properties/cocktails/items' }
-                },
-                performance_metrics: {
-                  type: 'object',
-                  description: 'Batch processing performance data',
-                  properties: {
-                    processing_time_ms: { type: 'number' },
-                    api_calls_made: { type: 'number' },
-                    cache_hits: { type: 'number' },
-                    cache_misses: { type: 'number' },
-                    batch_processing_used: { type: 'boolean' },
-                    parallel_requests: { type: 'number' }
-                  }
-                },
-                search_metadata: {
-                  type: 'object',
-                  properties: {
-                    enhanced_query: { type: 'string', description: 'Processed natural language query' },
-                    applied_filters: { type: 'array', items: { type: 'string' } },
-                    search_strategy: { type: 'string', description: 'Batch processing strategy used' }
-                  }
-                }
-              }
-            },
+            outputSchema: OutputSchemas.cocktailSearchOutputSchema,
           },
           {
             name: 'get_recipe',
@@ -1196,64 +1104,7 @@ Structured output with complete recipe data:
                 }
               ],
             },
-            outputSchema: {
-        type: 'object',
-        properties: {
-          recipes: {
-            type: 'array',
-            items: {
-              type: 'object',
-              properties: {
-                id: { type: 'number' },
-                name: { type: 'string' },
-                description: { type: 'string' },
-                ingredients: {
-                  type: 'array',
-                  items: {
-                    type: 'object',
-                    properties: {
-                      name: { type: 'string' },
-                      formatted: { type: 'string' },
-                      amount: { type: 'string' },
-                      optional: { type: 'boolean' }
-                    }
-                  }
-                },
-                instructions: {
-                  type: 'array',
-                  items: {
-                    type: 'object',
-                    properties: {
-                      step: { type: 'number' },
-                      instruction: { type: 'string' }
-                    }
-                  }
-                },
-                details: {
-                  type: 'object',
-                  properties: {
-                    abv: { type: 'number' },
-                    glass: { type: 'string' },
-                    method: { type: 'string' },
-                    garnish: { type: 'string' },
-                    direct_link: { type: 'string' },
-                    tags: { type: 'array', items: { type: 'string' } }
-                  }
-                }
-              }
-            }
-          },
-          performance: {
-            type: 'object',
-            properties: {
-              processing_time: { type: 'number' },
-              recipes_fetched: { type: 'number' },
-              cache_hits: { type: 'number' },
-              batch_processing: { type: 'boolean' }
-            }
-          }
-        }
-      },
+            outputSchema: OutputSchemas.recipeOutputSchema,
           },
 
           {
@@ -1444,110 +1295,32 @@ Returns detailed ingredient information including:
     };
   }
 
-  private async handleFindSimilarCocktails(args: SimilarCocktailsParams) {
-    // First get the base cocktail info
+  private async handleFindSimilarCocktails(args: SimilarCocktailsParams, startTime: number) {
     const baseCocktail = await this.barClient.getCocktailRecipe(args.cocktail_id);
     const similarCocktails = await this.barClient.findSimilarCocktails(args.cocktail_id, args.limit || 10);
     
-    let response = `# Cocktails Similar to ${baseCocktail.name}\n\nBased on your Bar Assistant database, here are cocktails similar to **${baseCocktail.name}** with complete recipes:\n\n`;
-    
-    // Fetch complete recipe details for each similar cocktail
-    for (let index = 0; index < similarCocktails.length; index++) {
-      const similar = similarCocktails[index];
-      const cocktail = similar.cocktail;
-      
-      try {
-        // Get full recipe details
-        const fullRecipe = await this.barClient.getCocktailRecipe(cocktail.id);
-        
-        const similarityScore = similar.similarity_score ? 
-          `${Math.round(similar.similarity_score * 100)}% similar` : 'Similarity not calculated';
-        
-        const abv = fullRecipe.abv ? `${fullRecipe.abv}% ABV` : 'ABV not specified';
-        const glass = fullRecipe.glass?.name ? ` | ${fullRecipe.glass.name}` : '';
-        const method = fullRecipe.method?.name ? ` | ${fullRecipe.method.name}` : '';
-        
-        // Format cocktail with consistent structure
-        const formattedRecipe = this.formatCocktailResult(fullRecipe);
-        
-        response += `## ${index + 1}. ${formattedRecipe.name} - ${similarityScore}\n`;
-        
-        // Details line
-        const details = [];
-        if (formattedRecipe.details.abv) details.push(`${formattedRecipe.details.abv}% ABV`);
-        if (formattedRecipe.details.glass) details.push(formattedRecipe.details.glass);
-        if (formattedRecipe.details.method) details.push(formattedRecipe.details.method);
-        if (details.length > 0) {
-          response += `**${details.join(' | ')}**\n`;
-        }
-        
-        if (formattedRecipe.description) {
-          response += `*${formattedRecipe.description}*\n`;
-        }
-        
-        response += `**ID:** ${formattedRecipe.id}\n`;
-        if (formattedRecipe.details.direct_link) {
-          response += `**Direct Link:** ${formattedRecipe.details.direct_link}\n`;
-        }
-        response += `\n`;
-        
-        // Ingredients with bullet points
-        response += `### Ingredients:\n`;
-        response += `${this.formatIngredientList(formattedRecipe.ingredients)}\n\n`;
-        
-        // Instructions 
-        response += `### Instructions:\n`;
-        formattedRecipe.instructions.forEach((inst: any) => {
-          response += `${inst.step}. ${inst.instruction}\n`;
-        });
-        
-        // Garnish if present
-        if (formattedRecipe.details.garnish) {
-          response += `\n**Garnish:** ${formattedRecipe.details.garnish}\n`;
-        }
-        
-        // Add similarity reasons
-        const reasons = similar.similarity_reasons?.join(', ') || 'Similar flavor profile';
-        response += `\n*Why similar: ${reasons}*\n`;
-        
-        // Add separator between cocktails (but not after the last one)
-        if (index < similarCocktails.length - 1) {
-          response += `\n---\n\n`;
-        } else {
-          response += `\n`;
-        }
-        
-      } catch (error) {
-        // Fallback to basic info if recipe fetch fails
-        const ingredients = cocktail.short_ingredients?.map(ing => {
-          const formattedVolume = this.formatVolume(ing.pivot.amount, ing.pivot.units);
-          return `${formattedVolume} ${ing.name}`;
-        }).join(', ') || 'No ingredients listed';
+    const formattedResults = await this.fetchCompleteRecipes(similarCocktails.map(c => c.cocktail));
 
-        const similarityScore = similar.similarity_score ? 
-          `${Math.round(similar.similarity_score * 100)}% similar` : 'Similarity not calculated';
-        
-        response += `## ${index + 1}. ${cocktail.name} - ${similarityScore}\n`;
-        response += `**ABV:** ${cocktail.abv ? `${cocktail.abv}%` : 'Not specified'}\n`;
-        response += `**Ingredients:** ${ingredients}\n`;
-        response += `**Glass:** ${cocktail.glass?.name || 'Not specified'}\n`;
-        response += `**ID:** ${cocktail.id}\n`;
-        response += `*Complete recipe details temporarily unavailable*\n\n`;
-        
-        if (index < similarCocktails.length - 1) {
-          response += `---\n\n`;
-        }
-      }
-    }
-    
-    return {
-      content: [
-        {
-          type: 'text',
-          text: response,
-        },
-      ],
+    const humanText = this.formatSimilarCocktails(
+      formattedResults.map((cocktail, i) => ({
+        cocktailResult: cocktail,
+        similarity_score: similarCocktails[i]?.similarity_score,
+        similarity_reasons: similarCocktails[i]?.similarity_reasons,
+      })),
+      baseCocktail.name
+    );
+
+    const structuredData: ResponseSchemas.CocktailSearchResponse = {
+      results: formattedResults,
+      query: {
+        terms: `similar to ${baseCocktail.name}`,
+        filters: { similar_to_id: args.cocktail_id },
+        search_type: 'similarity'
+      },
+      metadata: this.createResponseMetadata('bar_assistant_api', formattedResults.length, startTime)
     };
+
+    return this.createStructuredResponse(humanText, structuredData);
   }
 
   private async handleCheckInventory(args: InventoryCheckParams) {
@@ -1757,32 +1530,26 @@ Returns detailed ingredient information including:
     const startTime = Date.now();
     
     try {
-      // Parse natural language query if provided
       let enhancedArgs = { ...args };
       if (args.query && typeof args.query === 'string') {
         const parsedQuery = QueryParser.parse(args.query);
         enhancedArgs = QueryParser.enhanceSearchArgs(args, parsedQuery);
       }
       
-      // Check cache for search results
       const cacheKey = JSON.stringify(enhancedArgs);
       const cachedResult = this.cacheManager.getCachedSearch(cacheKey);
       if (cachedResult) {
         return cachedResult;
       }
       
-      // Handle similarity queries first (by name or ID)
       if (enhancedArgs.similar_to || enhancedArgs.similar_to_id) {
         const result = await this.handleSimilaritySearch(enhancedArgs, startTime);
-        // Cache similarity search results
         this.cacheManager.setCachedSearch(cacheKey, result);
         return result;
       }
 
-      // Perform the main search
       const { results, searchType, appliedFilters } = await this.performCocktailSearch(enhancedArgs);
       
-      // Build structured response
       const structuredData: ResponseSchemas.CocktailSearchResponse = {
         results: await this.fetchCompleteRecipes(results.slice(0, enhancedArgs.limit || 20)),
         query: {
@@ -1793,36 +1560,15 @@ Returns detailed ingredient information including:
         metadata: this.createResponseMetadata('bar_assistant_api', results.length, startTime)
       };
 
-      // Build human-readable response
       const humanText = this.formatSearchResultsText(structuredData, enhancedArgs);
-
       const result = this.createStructuredResponse(humanText, structuredData);
       
-      // Cache regular search results
       this.cacheManager.setCachedSearch(cacheKey, result);
       
       return result;
       
     } catch (error) {
-      const errorData: ResponseSchemas.ErrorResponse = {
-        error: error instanceof Error ? error.message : String(error),
-        error_code: 'SEARCH_ERROR',
-        suggestions: [
-          'Check your search criteria and try again',
-          'Try broader search terms',
-          'Remove some filters',
-          'Check ingredient spelling'
-        ],
-        query: args,
-        metadata: this.createResponseMetadata('error', 0, startTime)
-      };
-
-      const errorText = `# Smart Search Error\n\n` +
-        `Sorry, I encountered an error while searching for cocktails.\n\n` +
-        `**Error:** ${errorData.error}\n\n` +
-        `**Suggestions:**\n${errorData.suggestions?.map(s => `• ${s}`).join('\n')}`;
-
-      return this.createStructuredResponse(errorText, errorData);
+      return this.handleError(error, 'Smart search failed', args, startTime);
     }
   }
 
@@ -1830,7 +1576,6 @@ Returns detailed ingredient information including:
     const startTime = Date.now();
     
     try {
-      // Determine if this is a batch request or single request
       const isBatchRequest = args.cocktail_ids || args.cocktail_names;
       const limit = Math.min(args.limit || 10, 20);
       
@@ -1840,24 +1585,13 @@ Returns detailed ingredient information including:
         return await this.handleSingleRecipeRequest(args, startTime);
       }
     } catch (error) {
-      const errorText = `# Recipe Error\n\n` +
-        `Sorry, I encountered an error while fetching recipes.\n\n` +
-        `**Error:** ${error instanceof Error ? error.message : String(error)}\n\n` +
-        `Please try again or contact support if the issue persists.`;
-      
-      return {
-        content: [{ type: 'text', text: errorText }]
-      };
+      return this.handleError(error, 'Get recipe failed', args, startTime);
     }
   }
 
-  /**
-   * Handle batch recipe requests with parallel processing
-   */
   private async handleBatchRecipeRequest(args: any, startTime: number, limit: number) {
     const cocktailRequests: Array<{id?: number, name?: string}> = [];
     
-    // Collect all cocktail requests
     if (args.cocktail_ids) {
       cocktailRequests.push(...args.cocktail_ids.slice(0, limit).map((id: number) => ({ id })));
     }
@@ -1867,16 +1601,9 @@ Returns detailed ingredient information including:
     }
     
     if (cocktailRequests.length === 0) {
-      return {
-        content: [{
-          type: 'text',
-          text: `# No Cocktails Specified\n\n` +
-            `Please provide cocktail_ids, cocktail_names, cocktail_id, or cocktail_name.`
-        }]
-      };
+      throw new Error('No cocktails specified. Please provide cocktail_ids, cocktail_names, cocktail_id, or cocktail_name.');
     }
     
-    // Resolve names to IDs first (with caching)
     const resolvedCocktails: Array<{id: number, originalRequest: any}> = [];
     
     for (const request of cocktailRequests) {
@@ -1900,196 +1627,125 @@ Returns detailed ingredient information including:
     }
     
     if (resolvedCocktails.length === 0) {
-      return {
-        content: [{
-          type: 'text',
-          text: `# No Cocktails Found\n\n` +
-            `None of the specified cocktails could be found in the database.\n\n` +
-            `**Tried:** ${cocktailRequests.map(r => r.name || `ID ${r.id}`).join(', ')}\n\n` +
-            `**Suggestions:**\n` +
-            `• Check spelling of cocktail names\n` +
-            `• Use \`smart_search_cocktails\` to find available cocktails\n` +
-            `• Verify cocktail IDs are correct`
-        }]
-      };
+      throw new Error('None of the specified cocktails could be found in the database.');
     }
     
-    // Use existing batch fetching infrastructure
     const mockCocktails = resolvedCocktails.map(r => ({ id: r.id }));
     const completeRecipes = await this.fetchCompleteRecipes(mockCocktails);
     
     const processingTime = Date.now() - startTime;
     
-    // Build response
-    let response = `# 📖 Batch Recipe Results\n\n`;
-    response += `Successfully retrieved ${completeRecipes.length} of ${cocktailRequests.length} requested recipes in ${processingTime}ms\n\n`;
+    let humanText = `# 📖 Batch Recipe Results\n\nSuccessfully retrieved ${completeRecipes.length} of ${cocktailRequests.length} requested recipes in ${processingTime}ms\n\n`;
     
     if (completeRecipes.length > 1) {
-      response += this.formatMultipleCocktails(completeRecipes);
+      humanText += this.formatMultipleCocktails(completeRecipes);
     } else if (completeRecipes.length === 1) {
-      response += this.formatSingleRecipeDetailed(completeRecipes[0]);
+      humanText += this.formatSingleRecipeDetailed(completeRecipes[0]);
     }
     
-    // Add variations if requested
+    let variations: ResponseSchemas.CocktailResult[] = [];
     if (args.include_variations && completeRecipes.length === 1) {
       try {
-        const variations = await this.barClient.findSimilarCocktails(completeRecipes[0].id, 3);
-        if (variations.length > 0) {
-          response += `\n\n# 🔄 Similar Recipes\n\n`;
-          const variationRecipes = await this.fetchCompleteRecipes(
-            variations.map(v => v.cocktail)
-          );
-          response += this.formatMultipleCocktails(variationRecipes);
+        const similar = await this.barClient.findSimilarCocktails(completeRecipes[0].id, 3);
+        if (similar.length > 0) {
+          variations = await this.fetchCompleteRecipes(similar.map(v => v.cocktail));
+          humanText += `\n\n# 🔄 Similar Recipes\n\n${this.formatMultipleCocktails(variations)}`;
         }
       } catch (error) {
         console.warn('Failed to fetch variations:', error);
       }
     }
     
-    // Add performance summary
-    response += `\n\n---\n\n**⚡ Performance Summary:**\n`;
-    response += `• **Total time:** ${processingTime}ms\n`;
-    response += `• **Recipes fetched:** ${completeRecipes.length}\n`;
-    response += `• **Cache utilization:** Enabled\n`;
-    response += `• **Batch processing:** ${completeRecipes.length > 1 ? 'Used' : 'Single recipe'}`;
-    
-    return {
-      content: [{ type: 'text', text: response }]
+    const structuredData = {
+      results: completeRecipes,
+      variations: variations,
+      query: { ...args },
+      metadata: this.createResponseMetadata('bar_assistant_api', completeRecipes.length, startTime)
     };
+    
+    return this.createStructuredResponse(humanText, structuredData);
   }
 
-  /**
-   * Handle single recipe requests (backwards compatibility)
-   */
   private async handleSingleRecipeRequest(args: any, startTime: number) {
-    let cocktail = null;
-    let recipe = null;
+    let recipe;
 
-    // Handle ID-based lookup
     if (args.cocktail_id) {
-      // Check cache first
       const cached = this.cacheManager.getCachedRecipe(args.cocktail_id);
       if (cached) {
         recipe = cached;
-        cocktail = recipe;
       } else {
-        // Get by ID with fallback
-        try {
-          recipe = await this.getCocktailWithFallback(args.cocktail_id);
-          cocktail = recipe;
-          this.cacheManager.setCachedRecipe(args.cocktail_id, recipe);
-        } catch (error) {
-          return {
-            content: [
-              {
-                type: 'text',
-                text: `# Recipe Not Found\n\n` +
-                  `Sorry, I couldn't find a cocktail with ID ${args.cocktail_id}.\n\n` +
-                  `**Error:** ${error instanceof Error ? error.message : String(error)}\n\n` +
-                  `Please check the ID and try again, or use cocktail name instead.`,
-              },
-            ],
-          };
-        }
+        recipe = await this.getCocktailWithFallback(args.cocktail_id);
+        this.cacheManager.setCachedRecipe(args.cocktail_id, recipe);
       }
-    }
-    // Handle name-based lookup  
-    else if (args.cocktail_name) {
+    } else if (args.cocktail_name) {
       const searchResults = await this.barClient.findCocktailByName(args.cocktail_name);
-
       if (searchResults.data.length === 0) {
-        return {
-          content: [
-            {
-              type: 'text',
-              text: `# Recipe Not Found\n\n` +
-                `Sorry, I couldn't find a recipe for "${args.cocktail_name}" in your Bar Assistant database.\n\n` +
-                `**Suggestions:**\n` +
-                `• Check the spelling\n` +
-                `• Try a shorter name (e.g., "Manhattan" instead of "Perfect Manhattan")\n` +
-                `• Use \`smart_search_cocktails\` to browse available cocktails\n` +
-                `• Try searching for ingredients instead\n` +
-                `• Use batch mode: {cocktail_names: ["Manhattan", "Negroni"]} for multiple recipes`,
-            },
-            ],
-          };
-        }
-
-        cocktail = searchResults.data[0];
-        
-        // Check cache first
-        const cached = this.cacheManager.getCachedRecipe(cocktail.id);
-        if (cached) {
-          recipe = cached;
-        } else {
-          // Try to get detailed recipe with fallback
-          recipe = await this.getCocktailWithFallback(cocktail.id, cocktail);
-          this.cacheManager.setCachedRecipe(cocktail.id, recipe);
-        }
+        throw new Error(`Could not find a recipe for "${args.cocktail_name}".`);
+      }
+      const cocktail = searchResults.data[0];
+      const cached = this.cacheManager.getCachedRecipe(cocktail.id);
+      if (cached) {
+        recipe = cached;
       } else {
-        return {
-          content: [
-            {
-              type: 'text',
-              text: `# Missing Information\n\n` +
-                `Please provide either a \`cocktail_id\`, \`cocktail_name\`, \`cocktail_ids\`, or \`cocktail_names\` to get recipes.\n\n` +
-                `**Examples:**\n` +
-                `• Single recipe: {cocktail_name: "Manhattan"}\n` +
-                `• Batch recipes: {cocktail_names: ["Manhattan", "Negroni", "Martini"]}\n` +
-                `• Mixed batch: {cocktail_names: ["Manhattan"], cocktail_ids: [123, 456]}`,
-            },
-          ],
-        };
+        recipe = await this.getCocktailWithFallback(cocktail.id, cocktail);
+        this.cacheManager.setCachedRecipe(cocktail.id, recipe);
       }
-
-      // Format the recipe using enhanced formatting
-      const formattedRecipe = this.formatCocktailResult(recipe);
-      const processingTime = Date.now() - startTime;
-      
-      // Use detailed single recipe formatting
-      let response = this.formatSingleRecipeDetailed(formattedRecipe);
-      
-      // Add variations if requested
-      if (args.include_variations) {
-        try {
-          const variations = await this.barClient.findSimilarCocktails(recipe.id, 3);
-          if (variations.length > 0) {
-            response += `\n\n# 🔄 Similar Recipes\n\n`;
-            const variationRecipes = await this.fetchCompleteRecipes(
-              variations.map(v => v.cocktail)
-            );
-            response += this.formatMultipleCocktails(variationRecipes);
-          }
-        } catch (error) {
-          response += `\n\n*Similar cocktails not available*\n\n`;
-        }
-      }
-      
-      // Add performance info for single requests too
-      response += `\n\n---\n\n**⚡ Performance:** ${processingTime}ms ${this.cacheManager.getCachedRecipe(formattedRecipe.id) ? '(cached)' : '(fresh)'}**`;
-
-      return {
-        content: [
-          {
-            type: 'text',
-            text: response,
-          },
-        ],
-      };
-    } catch (error: any) {
-      console.error('Error getting recipe:', error);
-      return {
-        content: [
-          {
-            type: 'text',
-            text: `# Error Getting Recipe\n\n` +
-              `Sorry, I encountered an error while looking up the recipe.\n\n` +
-              `**Error:** ${error instanceof Error ? error.message : String(error)}\n\n` +
-              `Please try again or use \`smart_search_cocktails\` to find the cocktail first.`,
-          },
-        ],
-      };
+    } else {
+      throw new Error('Please provide either a cocktail_id or cocktail_name.');
     }
+
+    const formattedRecipe = this.formatCocktailResult(recipe);
+    let humanText = this.formatSingleRecipeDetailed(formattedRecipe);
+    
+    let variations: ResponseSchemas.CocktailResult[] = [];
+    if (args.include_variations) {
+      try {
+        const similar = await this.barClient.findSimilarCocktails(recipe.id, 3);
+        if (similar.length > 0) {
+          variations = await this.fetchCompleteRecipes(similar.map(v => v.cocktail));
+          humanText += `\n\n# 🔄 Similar Recipes\n\n${this.formatMultipleCocktails(variations)}`;
+        }
+      } catch (error) {
+        console.warn('Failed to fetch variations:', error);
+      }
+    }
+    
+    const structuredData = {
+      result: formattedRecipe,
+      variations: variations,
+      query: {
+        method: args.cocktail_id ? 'id' : 'name',
+        value: args.cocktail_id || args.cocktail_name
+      },
+      metadata: this.createResponseMetadata('bar_assistant_api', 1, startTime)
+    };
+
+    return this.createStructuredResponse(humanText, structuredData);
+  }
+
+  private handleError(error: any, context: string, args: any, startTime: number) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    console.error(`Error in ${context}:`, errorMessage);
+
+    const errorData: ResponseSchemas.ErrorResponse = {
+      error: errorMessage,
+      error_code: context.toUpperCase().replace(/ /g, '_'),
+      suggestions: [
+        'Check your search criteria and try again',
+        'Try broader search terms or fewer filters',
+        'Check spelling of names and ingredients'
+      ],
+      query: args,
+      metadata: this.createResponseMetadata('error', 0, startTime)
+    };
+
+    const errorText = `# Error: ${context}\n\n` +
+      `Sorry, I encountered an error.\n\n` +
+      `**Error:** ${errorData.error}\n\n` +
+      `**Suggestions:**\n${errorData.suggestions?.map(s => `• ${s}`).join('\n')}`;
+
+    return this.createStructuredResponse(errorText, errorData);
+  }
 
   private async handleGetTasteRecommendations(args: TasteRecommendationsParams) {
     try {
@@ -2202,7 +1858,6 @@ Returns detailed ingredient information including:
     const startTime = Date.now();
     
     try {
-      // Search for cocktails that use this ingredient
       const cocktailsWithIngredient = await this.barClient.searchCocktails({
         ingredient: args.ingredient_name,
         limit: 10,
@@ -2212,13 +1867,10 @@ Returns detailed ingredient information including:
       const cocktailUsage: ResponseSchemas.IngredientUsage[] = [];
 
       if (cocktailsWithIngredient.data.length > 0) {
-        response += `## Popular Cocktails Using ${args.ingredient_name}\n\n`;
-        response += `Here are complete recipes for cocktails featuring **${args.ingredient_name}**:\n\n`;
+        response += `## Popular Cocktails Using ${args.ingredient_name}\n\nHere are complete recipes for cocktails featuring **${args.ingredient_name}**:\n\n`;
         
-        // Fetch complete recipes for all cocktails
         const completeRecipes = await this.fetchCompleteRecipes(cocktailsWithIngredient.data);
         
-        // Add to structured data for all cocktails
         completeRecipes.forEach(cocktail => {
           cocktailUsage.push({
             cocktail,
@@ -2226,13 +1878,11 @@ Returns detailed ingredient information including:
           });
         });
         
-        // Use standardized multi-cocktail formatter with ingredient highlighting
         response += this.formatMultipleCocktails(completeRecipes, args.ingredient_name);
       } else {
         response += `## Usage\n\nNo cocktails found using "${args.ingredient_name}" in the current database.\n\n`;
       }
 
-      // Add substitution suggestions with structured data
       const substitutions: ResponseSchemas.SubstitutionSuggestion[] = [];
       const lowerName = args.ingredient_name.toLowerCase();
       
@@ -2261,7 +1911,6 @@ Returns detailed ingredient information including:
 
       response += `*All recipes above show exactly how **${args.ingredient_name}** is used in each cocktail.*`;
 
-      // Create structured response
       const structuredData: ResponseSchemas.IngredientInfoResponse = {
         ingredient: args.ingredient_name,
         description: `Information about ${args.ingredient_name} and cocktails that use it`,
@@ -2275,18 +1924,7 @@ Returns detailed ingredient information including:
 
       return this.createStructuredResponse(response, structuredData);
     } catch (error) {
-      console.error('Error getting ingredient info:', error);
-      return {
-        content: [
-          {
-            type: 'text',
-            text: `# Error Getting Ingredient Information\n\n` +
-              `Sorry, I encountered an error while looking up information for "${args.ingredient_name}".\n\n` +
-              `**Error:** ${error instanceof Error ? error.message : String(error)}\n\n` +
-              `Please check the ingredient name and try again.`,
-          },
-        ],
-      };
+      return this.handleError(error, 'Get ingredient info failed', args, startTime);
     }
   }
 

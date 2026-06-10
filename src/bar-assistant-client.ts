@@ -448,7 +448,8 @@ export class BarAssistantClient {
     return ingredient.toLowerCase()
       .replace(/\s+/g, ' ')
       .replace(/,.*$/, '') // Remove everything after comma
-      .replace(/\(.*\)/, '') // Remove parenthetical content
+      .replace(/\([^)]*\)/g, '') // Remove parenthetical content non-greedily
+      .replace(/\s+/g, ' ') // Clean up extra spaces
       .trim();
   }
   
@@ -456,14 +457,14 @@ export class BarAssistantClient {
     const normalized = this.normalizeIngredientName(ingredient);
     const spirits = ['gin', 'vodka', 'rum', 'whiskey', 'whisky', 'bourbon', 'rye', 'scotch', 
                    'tequila', 'mezcal', 'brandy', 'cognac', 'armagnac', 'pisco', 'cachaça'];
-    return spirits.some(spirit => normalized.includes(spirit));
+    return spirits.some(spirit => new RegExp('(?:^|\\s)' + spirit + '(?:\\s|$)', 'i').test(normalized));
   }
   
   private isKeyModifier(ingredient: string): boolean {
     const normalized = this.normalizeIngredientName(ingredient);
     const modifiers = ['vermouth', 'campari', 'aperol', 'bitters', 'cointreau', 'triple sec', 
                       'chartreuse', 'benedictine', 'maraschino', 'creme', 'liqueur'];
-    return modifiers.some(modifier => normalized.includes(modifier));
+    return modifiers.some(modifier => new RegExp('(?:^|\\s)' + modifier + '(?:\\s|$)', 'i').test(normalized));
   }
 
   private getSimilarityReasons(cocktail1: DetailedRecipe, cocktail2: any): string[] {

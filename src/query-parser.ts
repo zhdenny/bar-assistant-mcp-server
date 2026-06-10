@@ -197,18 +197,18 @@ export class QueryParser {
 
     // Add ingredients to must_include
     if (parsedQuery.ingredients.length > 0) {
-      enhanced.must_include = [
+      enhanced.must_include = Array.from(new Set([
         ...(args.must_include || []),
         ...parsedQuery.ingredients
-      ];
+      ]));
     }
 
     // Add exclusions
     if (parsedQuery.excludes.length > 0) {
-      enhanced.must_exclude = [
+      enhanced.must_exclude = Array.from(new Set([
         ...(args.must_exclude || []),
         ...parsedQuery.excludes
-      ];
+      ]));
     }
 
     // Apply glass preference

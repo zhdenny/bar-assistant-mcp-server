@@ -78,8 +78,8 @@ export class CacheManager {
       // Evict least recently used entries (by access count and age)
       const entries = Array.from(cache.entries());
       entries.sort((a, b) => {
-        const scoreA = a[1].accessCount / (Date.now() - a[1].timestamp);
-        const scoreB = b[1].accessCount / (Date.now() - b[1].timestamp);
+        const scoreA = a[1].accessCount / Math.max(1, Date.now() - a[1].timestamp);
+        const scoreB = b[1].accessCount / Math.max(1, Date.now() - b[1].timestamp);
         return scoreA - scoreB;
       });
       

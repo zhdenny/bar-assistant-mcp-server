@@ -2109,24 +2109,34 @@ Returns detailed ingredient information including:
 
     app.use(authMiddleware);
 
-    // Keep track of the current transport
-    let transport: SSEServerTransport | null = null;
+    // Keep track of active transports by session ID
+    const transports: Record<string, SSEServerTransport> = {};
 
     app.get('/sse', async (req, res) => {
       console.log('New SSE connection');
-      transport = new SSEServerTransport('/message', res);
-      await this.server.connect(transport);
+      const transport = new SSEServerTransport('/message', res);
+      
+      // Store the transport using its sessionId
+      transports[transport.sessionId] = transport;
       
       // Clean up when connection closes
       req.on('close', () => {
-        console.log('SSE connection closed');
-        // Optionally cleanup
+        console.log(`SSE connection closed: ${transport.sessionId}`);
+        delete transports[transport.sessionId];
       });
+
+      await this.server.connect(transport);
     });
 
     app.post('/message', async (req, res) => {
+      const sessionId = req.query.sessionId as string;
+      if (!sessionId) {
+        res.status(400).send('Missing sessionId query parameter');
+        return;
+      }
+      const transport = transports[sessionId];
       if (!transport) {
-        res.sendStatus(400);
+        res.status(400).send('No active transport session found for the provided sessionId');
         return;
       }
       await transport.handlePostMessage(req, res);

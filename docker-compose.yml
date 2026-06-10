@@ -1,6 +1,6 @@
 services:
   bar-assistant-mcp-server:
-    image: bar-assistant-mcp-server:latest
+    image: zhdenny/bar-assistant-mcp-server:latest
     container_name: bar-assistant-mcp-server
     command: npm start -- --sse
     restart: unless-stopped

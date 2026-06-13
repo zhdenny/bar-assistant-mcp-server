@@ -23,12 +23,29 @@ export class BarAssistantClient {
   private config: BarAssistantConfig;
 
   constructor(config: BarAssistantConfig) {
-    this.config = config;
+    const normalizeString = (str: string): string => {
+      if (!str) return '';
+      let s = str.trim();
+      if ((s.startsWith("'") && s.endsWith("'")) || (s.startsWith('"') && s.endsWith('"'))) {
+        s = s.substring(1, s.length - 1);
+      }
+      return s.trim();
+    };
+
+    const normalizedToken = normalizeString(config.token);
+    const normalizedBaseUrl = normalizeString(config.baseUrl);
+
+    this.config = {
+      ...config,
+      token: normalizedToken,
+      baseUrl: normalizedBaseUrl,
+    };
+
     this.client = axios.create({
-      baseURL: config.baseUrl,
+      baseURL: normalizedBaseUrl,
       timeout: config.timeout || 30000,
       headers: {
-        'Authorization': `Bearer ${config.token.replace(/\s/g, '')}`,
+        'Authorization': `Bearer ${normalizedToken.replace(/\s/g, '')}`,
         'Content-Type': 'application/json',
         'Accept': 'application/json',
         'Bar-Assistant-Bar-Id': config.barId || '1', // Default bar ID

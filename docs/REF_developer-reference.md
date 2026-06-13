@@ -42,7 +42,6 @@
 | `BAR_ASSISTANT_URL` | Yes | None | Base URL of the Bar Assistant instance |
 | `BAR_ASSISTANT_TOKEN` | Yes | None | API token for authentication |
 | `BAR_ASSISTANT_BAR_ID` | No | `1` | Bar ID context for queries |
-| `MCP_API_KEY` | No | None | Secret key to secure the SSE server |
 | `PORT` | No | `3001` | Server port used in SSE mode |
 
 ### Docker Deployment Configurations

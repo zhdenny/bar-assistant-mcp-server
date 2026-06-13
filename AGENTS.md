@@ -1,10 +1,10 @@
-# Agent — Bar Assistant MCP Server (v1.0.0) — 2026-06-10
+# Agent — Bar Assistant MCP Server (v1.0.5) — 2026-06-13
 
 > **Strict Rule**: Read this file at every session start.
 
 ## Project Setup
 - **Project Name**: Bar Assistant MCP Server
-- **Version**: 1.0.0 — use bump script only, never manually edit
+- **Version**: 1.0.5 — use bump script only, never manually edit
 - **Status**: Active
 - **Tech Stack**: Node.js, TypeScript, Express, Axios, MCP SDK
 - **Context Anchors**: None
@@ -85,6 +85,24 @@ Code blocks, commit messages, PR descriptions: write normal always.
 > Add project-specific state, quick-reference data, or active constraints here (e.g., board status, feature flags, intentional quirks).
 
 ---
+
+*v1.0.5 — 2026-06-13*
+- Integrated hybrid Streamable HTTP and Server-Sent Events (SSE) transports to support modern clients (e.g. agy).
+- Documented hybrid architecture, lifecycle endpoints, and proxy buffering avoidance headers in ARCH_technical-specs.md.
+
+*v1.0.4 — 2026-06-12*
+- Added Docker deployment and connectivity integration tests to run-tests.ts.
+- Added automatic custom environment loader for local development testing.
+
+*v1.0.3 — 2026-06-11*
+- Fixed missing express.json() and cors() middleware in SSE server connection.
+- Changed Docker/docker-compose entrypoint to run node directly to avoid stdio pollution from npm start.
+
+*v1.0.2 — 2026-06-11*
+- Removed MCP_API_KEY authentication requirements, middleware, configuration, and references across code, tests, and documentation.
+
+*v1.0.1 — 2026-06-11*
+- Fixed: Allowed active SSE session IDs to bypass auth check on POST /message, resolving parameter-stripping connection errors.
 
 *v1.0.0 — 2026-06-10*
 

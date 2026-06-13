@@ -30,4 +30,4 @@ RUN npm ci --only=production
 EXPOSE 3001
 
 # Define the command to run the app
-CMD [ "npm", "start" ]
+CMD [ "node", "dist/bar-assistant-mcp-server.js" ]

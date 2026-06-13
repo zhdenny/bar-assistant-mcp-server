@@ -45,19 +45,25 @@
 - Standard input/output transport layer for local MCP client interactions.
 - Direct stdin/stdout message processing.
 
-### 2. SSE Mode (`--sse` argument)
+### 2. SSE & Streamable HTTP Mode (`--sse` argument)
 - Starts Express server on configured port (default: `3001`).
-- Endpoint `/sse`: Establishes Server-Sent Events client transport.
-- Endpoint `/message`: Receives client messages via POST. Requires the `sessionId` query parameter for routing to the correct client connection.
+- **Hybrid Routing Layer**:
+  - **Legacy SSE Transport**:
+    - `GET /sse`: Establishes Server-Sent Events transport via standard `SSEServerTransport`.
+    - `POST /message`: Routes client JSON-RPC messages using the `sessionId` query parameter.
+  - **Modern Streamable HTTP Transport**:
+    - Used by modern MCP clients (e.g., `agy`).
+    - `POST /sse` (Handshake/Message): If no `mcp-session-id` header is present, initializes a stateful `StreamableHTTPTransport` instance, connects it to the MCP server, and generates a session ID returned via the `mcp-session-id` response header. Subsequent calls with this header route requests to the associated session, returning responses synchronously.
+    - `GET /sse` (Event Stream): Establishes the asynchronous event stream for a session when the `mcp-session-id` header or query parameter is provided.
+    - `DELETE /sse` (Cleanup): Closes and releases the `StreamableHTTPTransport` instance and its event stream connection.
+- **Proxy Buffering Prevention (Critical)**:
+  - Custom headers are sent on all event-stream responses to prevent reverse proxies (e.g., Nginx, Docker bridges) from buffering packets:
+    - `X-Accel-Buffering: no`
+    - `Cache-Control: no-cache, no-transform`
+    - `Connection: keep-alive`
+  - Servers must call `res.flushHeaders()` immediately and write a dummy `: keep-alive\n\n` comment to force connection establishment.
 - Rate limiting: Max 100 requests per 15-minute window.
 - Security: Optional `helmet` header protection.
-
-### 3. SSE Authentication Middleware
-Authentication is validated against the `MCP_API_KEY` environment variable. Access is granted if any of the following match:
-- Header: `Authorization: Bearer <API_KEY>`
-- Header: `X-API-Key: <API_KEY>`
-- Query Parameter: `?apiKey=<API_KEY>`
-
 ---
 
 ## API Client Integration

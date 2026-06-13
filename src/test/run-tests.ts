@@ -1,7 +1,36 @@
-import { BarAssistantClient } from '../src/bar-assistant-client.js';
-import { CacheManager } from '../src/cache-manager.js';
-import { QueryParser } from '../src/query-parser.js';
-import { DetailedRecipe } from '../src/types.js';
+import { execSync } from 'child_process';
+import http from 'http';
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
+import { BarAssistantClient } from '../bar-assistant-client.js';
+import { CacheManager } from '../cache-manager.js';
+import { QueryParser } from '../query-parser.js';
+import { DetailedRecipe } from '../types.js';
+
+// Simple custom .env loader
+let envPath = path.resolve(process.cwd(), '.env');
+if (!fs.existsSync(envPath)) {
+    envPath = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../.env');
+}
+if (fs.existsSync(envPath)) {
+    const envFile = fs.readFileSync(envPath, 'utf-8');
+    for (const line of envFile.split('\n')) {
+        const trimmed = line.trim();
+        if (!trimmed || trimmed.startsWith('#')) continue;
+        const index = trimmed.indexOf('=');
+        if (index === -1) continue;
+        const key = trimmed.substring(0, index).trim();
+        let val = trimmed.substring(index + 1).trim();
+        if ((val.startsWith("'") && val.endsWith("'")) || (val.startsWith('"') && val.endsWith('"'))) {
+            val = val.substring(1, val.length - 1);
+        }
+        if (!process.env[key]) {
+            process.env[key] = val;
+        }
+    }
+}
+
 
 class BarAssistantTester {
     private client: BarAssistantClient;
@@ -38,6 +67,8 @@ class BarAssistantTester {
             { name: 'Unit Tests: Spirit/Modifier Word Boundaries', fn: () => this.testSpiritModifierBoundaries() },
             { name: 'Unit Tests: Search Args Deduplication', fn: () => this.testSearchArgsDeduplication() },
             { name: 'Unit Tests: SSE Session Routing', fn: () => this.testSSESessionRouting() },
+            { name: 'Unit Tests: Token Normalization (Quotes)', fn: () => this.testTokenNormalizationQuotes() },
+            { name: 'Docker Deployment and Connectivity Test', fn: () => this.testDockerDeployment() },
         ];
 
         for (const test of tests) {
@@ -288,22 +319,6 @@ class BarAssistantTester {
         return false;
     }
 
-    async testNegroniScenario() {
-        console.log('   🎯 Testing Negroni Scenario Integration');
-        await this.testNegroniRecommendations();
-    }
-
-    async testRecipeQuery() {
-        console.log('   🎯 Testing Recipe Queries');
-        await this.testNaturalLanguageRecipe();
-    }
-
-    async testLindenSquareRecipe() {
-        console.log('   🎯 Testing Linden Square');
-        const searchResults = await this.client.findCocktailByName('Linden Square');
-        console.log(`   Linden Square count: ${searchResults.data.length}`);
-    }
-
     // Unit test: SSE Session Routing
     async testSSESessionRouting(): Promise<boolean> {
         console.log('   🧪 Running SSE Session Routing test');
@@ -332,6 +347,160 @@ class BarAssistantTester {
         }
         console.log('   ❌ SSE Session Routing logic failed to map session IDs');
         return false;
+    }
+
+
+
+    async testNegroniScenario() {
+        console.log('   🎯 Testing Negroni Scenario Integration');
+        await this.testNegroniRecommendations();
+    }
+
+    async testRecipeQuery() {
+        console.log('   🎯 Testing Recipe Queries');
+        await this.testNaturalLanguageRecipe();
+    }
+
+    async testLindenSquareRecipe() {
+        console.log('   🎯 Testing Linden Square');
+        const searchResults = await this.client.findCocktailByName('Linden Square');
+        console.log(`   Linden Square count: ${searchResults.data.length}`);
+    }
+
+    async testDockerDeployment(): Promise<boolean> {
+        console.log('   🐳 Testing Docker Deployment and Connectivity...');
+        const containerName = 'bar-assistant-mcp-server-test-run';
+        const imageTag = 'bar-assistant-mcp-server-test:latest';
+        const testPort = 3002;
+
+        try {
+            // 1. Build the docker image
+            console.log('   Building docker image...');
+            execSync(`docker build -t ${imageTag} .`, { stdio: 'ignore' });
+
+            // 2. Stop and remove existing container if running
+            try {
+                execSync(`docker rm -f ${containerName}`, { stdio: 'ignore' });
+            } catch (e) {
+                // Ignore if container doesn't exist
+            }
+
+            // 3. Start the container in SSE mode
+            console.log('   Starting docker container...');
+            const runCmd = `docker run -d --name ${containerName} ` +
+                `-p ${testPort}:3001 ` +
+                `-e BAR_ASSISTANT_URL="${process.env.BAR_ASSISTANT_URL}" ` +
+                `-e BAR_ASSISTANT_TOKEN="${process.env.BAR_ASSISTANT_TOKEN}" ` +
+                `-e BAR_ASSISTANT_BAR_ID="${process.env.BAR_ASSISTANT_BAR_ID || '1'}" ` +
+                `-e PORT=3001 ` +
+                `${imageTag} ` +
+                `node dist/bar-assistant-mcp-server.js --sse`;
+            
+            execSync(runCmd, { stdio: 'ignore' });
+
+            // 4. Poll the debug endpoint to check when it is ready
+            console.log('   Waiting for container to become healthy...');
+            let isReady = false;
+            for (let i = 0; i < 15; i++) {
+                try {
+                    const debugUrl = `http://localhost:${testPort}/debug`;
+                    const response = await new Promise<string>((resolve, reject) => {
+                        http.get(debugUrl, (res) => {
+                            let data = '';
+                            res.on('data', chunk => data += chunk);
+                            res.on('end', () => {
+                                if (res.statusCode === 200) {
+                                    resolve(data);
+                                } else {
+                                    reject(new Error(`Status ${res.statusCode}`));
+                                }
+                            });
+                        }).on('error', reject);
+                    });
+                    
+                    const envData = JSON.parse(response);
+                    if (envData.BAR_ASSISTANT_URL === process.env.BAR_ASSISTANT_URL) {
+                        isReady = true;
+                        console.log('   Container successfully started and verified via /debug endpoint.');
+                        break;
+                    }
+                } catch (e) {
+                    // Wait 1 second before retry
+                    await new Promise(resolve => setTimeout(resolve, 1000));
+                }
+            }
+
+            if (!isReady) {
+                console.error('   ❌ Timeout waiting for container or environment variables incorrect.');
+                return false;
+            }
+
+            // 5. Test SSE connection
+            console.log('   Testing SSE connection...');
+            const sseSuccess = await new Promise<boolean>((resolve) => {
+                const sseUrl = `http://localhost:${testPort}/sse`;
+                const req = http.get(sseUrl, (res) => {
+                    const contentType = res.headers['content-type'] || '';
+                    if (contentType.includes('text/event-stream')) {
+                        console.log('   ✅ SSE headers verified successfully.');
+                        resolve(true);
+                    } else {
+                        console.error(`   ❌ Unexpected content-type: ${contentType}`);
+                        resolve(false);
+                    }
+                    res.destroy();
+                    req.destroy();
+                }).on('error', (err) => {
+                    console.error('   ❌ SSE connection failed:', err.message);
+                    resolve(false);
+                });
+            });
+
+            return sseSuccess;
+        } catch (error) {
+            console.error('   ❌ Docker test failed:', error);
+            return false;
+        } finally {
+            // Clean up container
+            console.log('   Cleaning up container...');
+            try {
+                execSync(`docker rm -f ${containerName}`, { stdio: 'ignore' });
+                console.log('   Container stopped and removed.');
+            } catch (e) {
+                console.error('   Failed to clean up container:', e);
+            }
+        }
+    }
+
+    async testTokenNormalizationQuotes(): Promise<boolean> {
+        console.log('   🧪 Running token and URL quote stripping normalization test');
+        const stripQuotes = (token: string): string => {
+            if (!token) return '';
+            let t = token.trim();
+            if ((t.startsWith("'") && t.endsWith("'")) || (t.startsWith('"') && t.endsWith('"'))) {
+                t = t.substring(1, t.length - 1);
+            }
+            return t.trim();
+        };
+
+        const testCases = [
+            { input: "'my-secret-token'", expected: "my-secret-token" },
+            { input: '"my-secret-token"', expected: "my-secret-token" },
+            { input: "  'my-secret-token'  ", expected: "my-secret-token" },
+            { input: "my-secret-token", expected: "my-secret-token" },
+            { input: "", expected: "" }
+        ];
+
+        let allPassed = true;
+        for (const tc of testCases) {
+            const result = stripQuotes(tc.input);
+            console.log(`     Input: "${tc.input}" -> Result: "${result}"`);
+            if (result !== tc.expected) {
+                console.error(`     ❌ Expected "${tc.expected}", got "${result}"`);
+                allPassed = false;
+            }
+        }
+        return allPassed;
     }
 }
 

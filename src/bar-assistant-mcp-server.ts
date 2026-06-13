@@ -4,6 +4,7 @@ import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { SSEServerTransport } from '@modelcontextprotocol/sdk/server/sse.js';
 import express, { Request, Response, NextFunction } from 'express';
+import cors from 'cors';
 import helmet from 'helmet';
 import morgan from 'morgan';
 import rateLimit from 'express-rate-limit';
@@ -30,6 +31,51 @@ import * as ResponseSchemas from './response-schemas.js';
 import * as OutputSchemas from './output-schemas.js';
 import { CacheManager } from './cache-manager.js';
 import { QueryParser } from './query-parser.js';
+
+class StreamableHTTPTransport {
+  public sessionId: string;
+  public sseRes: any = null;
+  public pendingResponses = new Map<string | number, any>();
+  public onclose?: () => void;
+  public onerror?: (error: Error) => void;
+  public onmessage?: (message: any) => void;
+
+  constructor(sessionId: string) {
+    this.sessionId = sessionId;
+  }
+
+  async start(): Promise<void> {}
+
+  async close(): Promise<void> {
+    if (this.sseRes) {
+      this.sseRes.end();
+      this.sseRes = null;
+    }
+    this.onclose?.();
+  }
+
+  async send(message: any): Promise<void> {
+    if (message.id !== undefined && this.pendingResponses.has(message.id)) {
+      const res = this.pendingResponses.get(message.id)!;
+      this.pendingResponses.delete(message.id);
+      res.json(message);
+      return;
+    }
+
+    if (this.sseRes) {
+      this.sseRes.write(`data: ${JSON.stringify(message)}\n\n`);
+    }
+  }
+
+  handlePost(message: any, res: any) {
+    if (message.id !== undefined) {
+      this.pendingResponses.set(message.id, res);
+    } else {
+      res.status(200).send('OK');
+    }
+    this.onmessage?.(message);
+  }
+}
 
 /**
  * Bar Assistant MCP Server
@@ -1724,7 +1770,12 @@ Returns detailed ingredient information including:
   }
 
   private handleError(error: any, context: string, args: any, startTime: number) {
-    const errorMessage = error instanceof Error ? error.message : String(error);
+    let errorMessage = String(error);
+    if (error instanceof Error) {
+      errorMessage = error.message;
+    } else if (error && typeof error === 'object' && 'message' in error) {
+      errorMessage = String(error.message);
+    }
     console.error(`Error in ${context}:`, errorMessage);
 
     const errorData: ResponseSchemas.ErrorResponse = {
@@ -2063,6 +2114,12 @@ Returns detailed ingredient information including:
   async runSSE(port: number): Promise<void> {
     const app = express();
     
+    // Enable CORS for external MCP clients
+    app.use(cors());
+
+    // Parse JSON bodies for POST requests (e.g. /message)
+    app.use(express.json());
+
     // Security middleware
     app.use(helmet());
     app.use(morgan('combined'));
@@ -2076,44 +2133,38 @@ Returns detailed ingredient information including:
     });
     app.use(limiter);
 
-    // API Key Authentication
-    const apiKey = process.env.MCP_API_KEY;
-    if (!apiKey) {
-      console.warn('⚠️  WARNING: MCP_API_KEY environment variable is not set!');
-      console.warn('   The server is running without authentication. This is NOT recommended for public exposure.');
-    }
-
-    const authMiddleware = (req: Request, res: Response, next: NextFunction) => {
-      if (!apiKey) return next(); // Skip auth if no key configured (dev mode)
-
-      const authHeader = req.headers.authorization;
-      const queryKey = req.query.apiKey as string;
-      
-      // Check Bearer token
-      if (authHeader && authHeader.startsWith('Bearer ') && authHeader.slice(7) === apiKey) {
-        return next();
-      }
-      
-      // Check X-API-Key header
-      if (req.headers['x-api-key'] === apiKey) {
-        return next();
-      }
-
-      // Check query parameter (fallback for clients that can't set headers)
-      if (queryKey === apiKey) {
-        return next();
-      }
-
-      res.status(401).json({ error: 'Unauthorized: Invalid API Key' });
-    };
-
-    app.use(authMiddleware);
-
     // Keep track of active transports by session ID
-    const transports: Record<string, SSEServerTransport> = {};
+    const transports: Record<string, any> = {};
 
     app.get('/sse', async (req, res) => {
-      console.log('New SSE connection');
+      const sessionId = (req.headers['mcp-session-id'] as string) || 
+                        (req.query.sessionId as string) || 
+                        (req.query.session_id as string);
+
+      if (sessionId && transports[sessionId]) {
+        console.log(`[StreamableHTTP] GET /sse event stream connected for session: ${sessionId}`);
+        const transport = transports[sessionId];
+        
+        res.writeHead(200, {
+          'Content-Type': 'text/event-stream',
+          'Cache-Control': 'no-cache, no-transform',
+          'Connection': 'keep-alive',
+          'X-Accel-Buffering': 'no',
+          'Access-Control-Allow-Origin': '*'
+        });
+        res.flushHeaders();
+        res.write(': keep-alive\n\n');
+        
+        transport.sseRes = res;
+        
+        req.on('close', () => {
+          console.log(`[StreamableHTTP] GET /sse connection closed for session: ${sessionId}`);
+          transport.sseRes = null;
+        });
+        return;
+      }
+
+      console.log('Legacy SSE connection');
       const transport = new SSEServerTransport('/message', res);
       
       // Store the transport using its sessionId
@@ -2142,15 +2193,54 @@ Returns detailed ingredient information including:
       await transport.handlePostMessage(req, res);
     });
 
+    app.post('/sse', async (req, res) => {
+      let sessionId = req.headers['mcp-session-id'] as string;
+      
+      if (!sessionId) {
+        // Generate new session ID for Streamable HTTP handshake
+        sessionId = Math.random().toString(36).substring(2, 15);
+        console.log(`[StreamableHTTP] POST /sse: creating new session ${sessionId}`);
+        
+        res.setHeader('mcp-session-id', sessionId);
+        res.setHeader('Access-Control-Expose-Headers', 'mcp-session-id');
+
+        const transport = new StreamableHTTPTransport(sessionId);
+        transports[sessionId] = transport;
+        
+        await this.server.connect(transport);
+        transport.handlePost(req.body, res);
+      } else {
+        const transport = transports[sessionId];
+        if (!transport) {
+          res.status(404).send('Session not found');
+          return;
+        }
+        transport.handlePost(req.body, res);
+      }
+    });
+
+    app.delete('/sse', async (req, res) => {
+      const sessionId = (req.headers['mcp-session-id'] as string) || 
+                        (req.query.sessionId as string) || 
+                        (req.query.session_id as string);
+      
+      console.log(`[StreamableHTTP] DELETE /sse received for session: ${sessionId}`);
+      if (sessionId && transports[sessionId]) {
+        const transport = transports[sessionId];
+        await transport.close();
+        delete transports[sessionId];
+        res.status(200).send('OK');
+      } else {
+        res.status(404).send('Session not found');
+      }
+    });
+
     app.get('/debug', (req: Request, res: Response) => {
       res.json(process.env);
     });
 
     app.listen(port, () => {
       console.log(`Bar Assistant MCP Server running on SSE at http://localhost:${port}/sse`);
-      if (apiKey) {
-        console.log('🔒 Authentication enabled. Clients must provide the API Key.');
-      }
     });
   }
 }

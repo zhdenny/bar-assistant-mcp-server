@@ -2,7 +2,7 @@ services:
   bar-assistant-mcp-server:
     image: zhdenny/bar-assistant-mcp-server:latest
     container_name: bar-assistant-mcp-server
-    command: npm start -- --sse
+    command: node dist/bar-assistant-mcp-server.js --sse
     restart: unless-stopped
     ports:
       - "3001:3001"

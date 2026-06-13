@@ -26,7 +26,6 @@ cd bar-assistant-mcp-server
     - `BAR_ASSISTANT_URL`: Your instance URL (e.g., `https://your-bar.com/bar`)
     - `BAR_ASSISTANT_TOKEN`: Your API token.
     - `BAR_ASSISTANT_BAR_ID`: The ID of the bar to query (usually `1`).
-    - `MCP_API_KEY`: A secret key to secure the server (optional but recommended).
 
     **Important:** If your token has special characters, wrap it in single quotes: `BAR_ASSISTANT_TOKEN='your|token'`.
 

@@ -32,6 +32,36 @@ import * as OutputSchemas from './output-schemas.js';
 import { CacheManager } from './cache-manager.js';
 import { QueryParser } from './query-parser.js';
 
+/**
+ * Validates the SSE token against the request.
+ * Supports token extraction from:
+ * - Authorization header (Bearer or plain)
+ * - Query parameter: token, apiKey, api_key, api-key
+ */
+export function validateSSEToken(req: any, sseToken: string): boolean {
+  if (!sseToken) {
+    return false;
+  }
+  
+  // 1. Check Authorization header
+  const authHeader = req.headers?.['authorization'] || req.headers?.['Authorization'];
+  if (authHeader) {
+    const parts = authHeader.split(' ');
+    const token = parts.length > 1 && parts[0].toLowerCase() === 'bearer' ? parts[1] : authHeader;
+    if (token.trim() === sseToken.trim()) {
+      return true;
+    }
+  }
+
+  // 2. Check query parameters
+  const queryToken = req.query?.token || req.query?.apiKey || req.query?.api_key || req.query?.['api-key'];
+  if (queryToken && typeof queryToken === 'string' && queryToken.trim() === sseToken.trim()) {
+    return true;
+  }
+
+  return false;
+}
+
 class StreamableHTTPTransport {
   public sessionId: string;
   public sseRes: any = null;
@@ -2112,6 +2142,12 @@ Returns detailed ingredient information including:
   }
 
   async runSSE(port: number): Promise<void> {
+    const sseToken = process.env.MCP_SSE_TOKEN;
+    if (!sseToken || sseToken.trim() === '') {
+      console.error('❌ ERROR: MCP_SSE_TOKEN environment variable must be set when running in SSE mode.');
+      process.exit(1);
+    }
+
     const app = express();
     
     // Enable CORS for external MCP clients
@@ -2133,10 +2169,19 @@ Returns detailed ingredient information including:
     });
     app.use(limiter);
 
+    // Authentication middleware
+    const authenticate = (req: Request, res: Response, next: NextFunction) => {
+      if (!validateSSEToken(req, sseToken)) {
+        res.status(401).json({ error: 'Unauthorized' });
+        return;
+      }
+      next();
+    };
+
     // Keep track of active transports by session ID
     const transports: Record<string, any> = {};
 
-    app.get('/sse', async (req, res) => {
+    app.get('/sse', authenticate, async (req, res) => {
       const sessionId = (req.headers['mcp-session-id'] as string) || 
                         (req.query.sessionId as string) || 
                         (req.query.session_id as string);
@@ -2179,7 +2224,7 @@ Returns detailed ingredient information including:
       await this.server.connect(transport);
     });
 
-    app.post('/message', async (req, res) => {
+    app.post('/message', authenticate, async (req, res) => {
       const sessionId = req.query.sessionId as string;
       if (!sessionId) {
         res.status(400).send('Missing sessionId query parameter');
@@ -2193,7 +2238,7 @@ Returns detailed ingredient information including:
       await transport.handlePostMessage(req, res);
     });
 
-    app.post('/sse', async (req, res) => {
+    app.post('/sse', authenticate, async (req, res) => {
       let sessionId = req.headers['mcp-session-id'] as string;
       
       if (!sessionId) {
@@ -2219,7 +2264,7 @@ Returns detailed ingredient information including:
       }
     });
 
-    app.delete('/sse', async (req, res) => {
+    app.delete('/sse', authenticate, async (req, res) => {
       const sessionId = (req.headers['mcp-session-id'] as string) || 
                         (req.query.sessionId as string) || 
                         (req.query.session_id as string);
@@ -2235,8 +2280,11 @@ Returns detailed ingredient information including:
       }
     });
 
-    app.get('/debug', (req: Request, res: Response) => {
-      res.json(process.env);
+    app.get('/debug', authenticate, (req: Request, res: Response) => {
+      res.json({
+        ready: true,
+        BAR_ASSISTANT_URL: process.env.BAR_ASSISTANT_URL,
+      });
     });
 
     app.listen(port, () => {

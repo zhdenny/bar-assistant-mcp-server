@@ -1,10 +1,10 @@
-# Agent — Bar Assistant MCP Server (v1.0.5) — 2026-06-13
+# Agent — Bar Assistant MCP Server (v1.0.6) — 2026-06-13
 
 > **Strict Rule**: Read this file at every session start.
 
 ## Project Setup
 - **Project Name**: Bar Assistant MCP Server
-- **Version**: 1.0.5 — use bump script only, never manually edit
+- **Version**: 1.0.6 — use bump script only, never manually edit
 - **Status**: Active
 - **Tech Stack**: Node.js, TypeScript, Express, Axios, MCP SDK
 - **Context Anchors**: None
@@ -85,6 +85,11 @@ Code blocks, commit messages, PR descriptions: write normal always.
 > Add project-specific state, quick-reference data, or active constraints here (e.g., board status, feature flags, intentional quirks).
 
 ---
+
+*v1.0.6 — 2026-06-13*
+- Added mandatory SSE token authentication using MCP_SSE_TOKEN environment variable.
+- Supported token extraction from Authorization headers and URL query parameters (?token=...).
+- Updated client mcp_config.json for agy integration verification.
 
 *v1.0.5 — 2026-06-13*
 - Integrated hybrid Streamable HTTP and Server-Sent Events (SSE) transports to support modern clients (e.g. agy).

@@ -62,8 +62,11 @@
     - `Cache-Control: no-cache, no-transform`
     - `Connection: keep-alive`
   - Servers must call `res.flushHeaders()` immediately and write a dummy `: keep-alive\n\n` comment to force connection establishment.
-- Rate limiting: Max 100 requests per 15-minute window.
-- Security: Optional `helmet` header protection.
+- Security:
+  - Optional `helmet` header protection.
+  - Mandatory token authentication via the `MCP_SSE_TOKEN` environment variable on all SSE endpoints (`/sse`, `/message`, `/debug`). Clients must authenticate via:
+    - `Authorization` header (e.g., `Bearer <token>` or plain `<token>`).
+    - Query parameter (e.g., `?token=<token>`, `?apiKey=<token>`, or `?api_key=<token>`).
 ---
 
 ## API Client Integration
@@ -86,5 +89,8 @@
 - **Missing ingredients in inventory**: The `InventoryStatus` interface uses `any[]` for `missing_ingredients` to simplify structure. Ensure type assertions are safe when querying this field.
 
 ---
+
+*v1.0.6 — 2026-06-13*
+- Documented mandatory SSE token authentication.
 
 *v1.0.0 — 2026-06-10*

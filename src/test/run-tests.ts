@@ -68,6 +68,7 @@ class BarAssistantTester {
             { name: 'Unit Tests: Search Args Deduplication', fn: () => this.testSearchArgsDeduplication() },
             { name: 'Unit Tests: SSE Session Routing', fn: () => this.testSSESessionRouting() },
             { name: 'Unit Tests: Token Normalization (Quotes)', fn: () => this.testTokenNormalizationQuotes() },
+            { name: 'Unit Tests: SSE Authentication', fn: () => this.testSSEAuthentication() },
             { name: 'Docker Deployment and Connectivity Test', fn: () => this.testDockerDeployment() },
         ];
 
@@ -392,6 +393,7 @@ class BarAssistantTester {
                 `-e BAR_ASSISTANT_URL="${process.env.BAR_ASSISTANT_URL}" ` +
                 `-e BAR_ASSISTANT_TOKEN="${process.env.BAR_ASSISTANT_TOKEN}" ` +
                 `-e BAR_ASSISTANT_BAR_ID="${process.env.BAR_ASSISTANT_BAR_ID || '1'}" ` +
+                `-e MCP_SSE_TOKEN="test-docker-token" ` +
                 `-e PORT=3001 ` +
                 `${imageTag} ` +
                 `node dist/bar-assistant-mcp-server.js --sse`;
@@ -403,7 +405,7 @@ class BarAssistantTester {
             let isReady = false;
             for (let i = 0; i < 15; i++) {
                 try {
-                    const debugUrl = `http://localhost:${testPort}/debug`;
+                    const debugUrl = `http://localhost:${testPort}/debug?token=test-docker-token`;
                     const response = await new Promise<string>((resolve, reject) => {
                         http.get(debugUrl, (res) => {
                             let data = '';
@@ -437,26 +439,49 @@ class BarAssistantTester {
 
             // 5. Test SSE connection
             console.log('   Testing SSE connection...');
-            const sseSuccess = await new Promise<boolean>((resolve) => {
+            
+            // 5.a Verify unauthenticated request is rejected
+            const sseUnauthSuccess = await new Promise<boolean>((resolve) => {
                 const sseUrl = `http://localhost:${testPort}/sse`;
                 const req = http.get(sseUrl, (res) => {
-                    const contentType = res.headers['content-type'] || '';
-                    if (contentType.includes('text/event-stream')) {
-                        console.log('   ✅ SSE headers verified successfully.');
+                    if (res.statusCode === 401) {
+                        console.log('   ✅ Unauthenticated SSE request correctly rejected with 401.');
                         resolve(true);
                     } else {
-                        console.error(`   ❌ Unexpected content-type: ${contentType}`);
+                        console.error(`   ❌ Unauthenticated SSE request returned status: ${res.statusCode}`);
                         resolve(false);
                     }
                     res.destroy();
                     req.destroy();
                 }).on('error', (err) => {
-                    console.error('   ❌ SSE connection failed:', err.message);
+                    console.error('   ❌ Unauthenticated connection failed:', err.message);
                     resolve(false);
                 });
             });
 
-            return sseSuccess;
+            if (!sseUnauthSuccess) return false;
+
+            // 5.b Verify authenticated request succeeds
+            const sseAuthSuccess = await new Promise<boolean>((resolve) => {
+                const sseUrl = `http://localhost:${testPort}/sse?token=test-docker-token`;
+                const req = http.get(sseUrl, (res) => {
+                    const contentType = res.headers['content-type'] || '';
+                    if (res.statusCode === 200 && contentType.includes('text/event-stream')) {
+                        console.log('   ✅ Authenticated SSE connection verified successfully.');
+                        resolve(true);
+                    } else {
+                        console.error(`   ❌ Authenticated SSE request failed. Status: ${res.statusCode}, Content-Type: ${contentType}`);
+                        resolve(false);
+                    }
+                    res.destroy();
+                    req.destroy();
+                }).on('error', (err) => {
+                    console.error('   ❌ Authenticated SSE connection failed:', err.message);
+                    resolve(false);
+                });
+            });
+
+            return sseAuthSuccess;
         } catch (error) {
             console.error('   ❌ Docker test failed:', error);
             return false;
@@ -500,6 +525,72 @@ class BarAssistantTester {
                 allPassed = false;
             }
         }
+        return allPassed;
+    }
+
+    async testSSEAuthentication(): Promise<boolean> {
+        console.log('   🧪 Running SSE Authentication unit tests');
+        const token = 'my-secret-sse-token';
+        
+        const testCases = [
+            // Valid token via header (Bearer)
+            {
+                req: { headers: { authorization: 'Bearer my-secret-sse-token' } },
+                expected: true,
+                desc: 'Valid Bearer Authorization header'
+            },
+            // Valid token via header (plain)
+            {
+                req: { headers: { authorization: 'my-secret-sse-token' } },
+                expected: true,
+                desc: 'Valid plain Authorization header'
+            },
+            // Valid token via query param (token)
+            {
+                req: { query: { token: 'my-secret-sse-token' } },
+                expected: true,
+                desc: 'Valid query parameter (?token=...)'
+            },
+            // Valid token via query param (apiKey)
+            {
+                req: { query: { apiKey: 'my-secret-sse-token' } },
+                expected: true,
+                desc: 'Valid query parameter (?apiKey=...)'
+            },
+            // Valid token via query param (api_key)
+            {
+                req: { query: { api_key: 'my-secret-sse-token' } },
+                expected: true,
+                desc: 'Valid query parameter (?api_key=...)'
+            },
+            // Invalid token in header
+            {
+                req: { headers: { authorization: 'Bearer wrong-token' } },
+                expected: false,
+                desc: 'Invalid Bearer token'
+            },
+            // Missing token
+            {
+                req: {},
+                expected: false,
+                desc: 'Missing token entirely'
+            }
+        ];
+
+        let allPassed = true;
+        // Import dynamically to avoid loading before compilation
+        const { validateSSEToken } = await import('../bar-assistant-mcp-server.js');
+
+        for (const tc of testCases) {
+            const result = validateSSEToken(tc.req, token);
+            if (result === tc.expected) {
+                console.log(`     ✅ Passed: ${tc.desc}`);
+            } else {
+                console.error(`     ❌ Failed: ${tc.desc} - Expected ${tc.expected}, got ${result}`);
+                allPassed = false;
+            }
+        }
+
         return allPassed;
     }
 }

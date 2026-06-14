@@ -45,7 +45,8 @@ export const cocktailResultSchema = {
         garnish: { type: "string", description: "Garnish description" },
         source: { type: "string", description: "Recipe source" },
         tags: { type: "array", items: { type: "string" }, description: "Recipe tags" },
-        direct_link: { type: "string", description: "Direct URL to cocktail page" }
+        direct_link: { type: "string", description: "Direct URL to cocktail page" },
+        image_url: { type: "string", description: "Direct URL to the main cocktail image" }
       }
     },
     confidence: { type: "number", minimum: 0, maximum: 1, description: "Search confidence score" },

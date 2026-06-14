@@ -69,6 +69,7 @@ class BarAssistantTester {
             { name: 'Unit Tests: SSE Session Routing', fn: () => this.testSSESessionRouting() },
             { name: 'Unit Tests: Token Normalization (Quotes)', fn: () => this.testTokenNormalizationQuotes() },
             { name: 'Unit Tests: SSE Authentication', fn: () => this.testSSEAuthentication() },
+            { name: 'Unit Tests: Cocktail Image Support', fn: () => this.testCocktailImageSupport() },
             { name: 'Docker Deployment and Connectivity Test', fn: () => this.testDockerDeployment() },
         ];
 
@@ -592,6 +593,41 @@ class BarAssistantTester {
         }
 
         return allPassed;
+    }
+
+    async testCocktailImageSupport(): Promise<boolean> {
+        console.log('   🧪 Running Cocktail Image Support unit test');
+        
+        // 1. Verify getBaseUrl() is implemented on BarAssistantClient and works
+        const mockClient = new BarAssistantClient({
+            baseUrl: 'http://localhost:8000/bar',
+            token: 'test-token',
+            barId: '1'
+        });
+        if (typeof (mockClient as any).getBaseUrl !== 'function') {
+            console.error('   ❌ getBaseUrl is not a function on BarAssistantClient');
+            return false;
+        }
+        if ((mockClient as any).getBaseUrl() !== 'http://localhost:8000/bar') {
+            console.error(`   ❌ getBaseUrl() returned unexpected: ${(mockClient as any).getBaseUrl()}`);
+            return false;
+        }
+        console.log('     ✅ getBaseUrl() verified');
+
+        // 2. Verify output schema supports image_url
+        const { cocktailResultSchema } = await import('../output-schemas.js');
+        const detailsProps = (cocktailResultSchema.properties.details as any)?.properties;
+        if (!detailsProps || !detailsProps.image_url) {
+            console.error('   ❌ cocktailResultSchema is missing details.image_url property');
+            return false;
+        }
+        if (detailsProps.image_url.type !== 'string') {
+            console.error('   ❌ details.image_url is not of type string');
+            return false;
+        }
+        console.log('     ✅ cocktailResultSchema details.image_url verified');
+        
+        return true;
     }
 }
 

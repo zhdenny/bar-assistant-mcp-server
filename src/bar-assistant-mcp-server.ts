@@ -292,6 +292,22 @@ class BarAssistantMCPServer {
       }
     }
 
+    // Resolve main image URL if available
+    let imageUrl: string | undefined = undefined;
+    if (cocktail.images && cocktail.images.length > 0) {
+      const mainImageId = cocktail.main_image_id;
+      const mainImage = mainImageId 
+        ? cocktail.images.find((img: any) => img.id === mainImageId) 
+        : cocktail.images[0];
+      const imageToUse = mainImage || cocktail.images[0];
+      if (imageToUse && imageToUse.file_path) {
+        const rawBaseUrl = this.barClient.getBaseUrl();
+        const baseUrl = rawBaseUrl.replace(/\/bar$/, '');
+        const cleanFilePath = imageToUse.file_path.replace(/^\//, '');
+        imageUrl = `${baseUrl}/uploads/${cleanFilePath}`;
+      }
+    }
+
     // Format details
     const details: ResponseSchemas.CocktailDetails = {
       abv: cocktail.abv || undefined,
@@ -300,7 +316,8 @@ class BarAssistantMCPServer {
       garnish: cocktail.garnish || undefined,
       source: cocktail.source || undefined,
       tags: cocktail.tags?.map((tag: any) => tag.name || tag) || undefined,
-      direct_link: cocktail.slug ? this.getCocktailDirectLink(cocktail.slug) : undefined
+      direct_link: cocktail.slug ? this.getCocktailDirectLink(cocktail.slug) : undefined,
+      image_url: imageUrl
     };
 
     return {
@@ -377,6 +394,10 @@ class BarAssistantMCPServer {
       if (details.length > 0) {
         result += `${details.join('  •  ')}\n\n`;
       }
+
+      if (cocktail.details.image_url) {
+        result += `![${cocktail.name}](${cocktail.details.image_url})\n\n`;
+      }
       
       // Description with better formatting
       if (cocktail.description) {
@@ -443,6 +464,10 @@ class BarAssistantMCPServer {
       if (details.length > 0) {
         response += `${details.join('  •  ')}\n\n`;
       }
+
+      if (cocktail.details.image_url) {
+        response += `![${cocktail.name}](${cocktail.details.image_url})\n\n`;
+      }
       
       // Description with better formatting
       if (cocktail.description) {
@@ -499,6 +524,10 @@ class BarAssistantMCPServer {
     if (cocktail.details.method) details.push(`🔧 **${cocktail.details.method}**`);
     if (details.length > 0) {
       result += `${details.join('  •  ')}\n\n`;
+    }
+
+    if (cocktail.details.image_url) {
+      result += `![${cocktail.name}](${cocktail.details.image_url})\n\n`;
     }
     
     // Description with better formatting

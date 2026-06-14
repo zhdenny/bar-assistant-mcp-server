@@ -74,6 +74,13 @@ export class BarAssistantClient {
   }
 
   /**
+   * Get the configured base URL of Bar Assistant
+   */
+  getBaseUrl(): string {
+    return this.config.baseUrl;
+  }
+
+  /**
    * Test API connectivity and authentication
    */
   async ping(): Promise<{ status: string; authenticated: boolean }> {

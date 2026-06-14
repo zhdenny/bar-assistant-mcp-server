@@ -1,10 +1,10 @@
-# Agent — Bar Assistant MCP Server (v1.0.6) — 2026-06-13
+# Agent — Bar Assistant MCP Server (v1.0.7) — 2026-06-13
 
 > **Strict Rule**: Read this file at every session start.
 
 ## Project Setup
 - **Project Name**: Bar Assistant MCP Server
-- **Version**: 1.0.6 — use bump script only, never manually edit
+- **Version**: 1.0.7 — use bump script only, never manually edit
 - **Status**: Active
 - **Tech Stack**: Node.js, TypeScript, Express, Axios, MCP SDK
 - **Context Anchors**: None
@@ -85,6 +85,12 @@ Code blocks, commit messages, PR descriptions: write normal always.
 > Add project-specific state, quick-reference data, or active constraints here (e.g., board status, feature flags, intentional quirks).
 
 ---
+
+*v1.0.7 — 2026-06-13*
+- Added support for getting and using cocktail images in any response.
+- Implemented getBaseUrl() method on BarAssistantClient.
+- Updated response schemas and output schemas to validate image_url.
+- Added TDD unit test to verify image URL retrieval and schema validation.
 
 *v1.0.6 — 2026-06-13*
 - Added mandatory SSE token authentication using MCP_SSE_TOKEN environment variable.

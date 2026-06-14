@@ -1,6 +1,6 @@
 {
   "name": "bar-assistant-mcp-server",
-  "version": "1.0.6",
+  "version": "1.0.7",
   "description": "High-performance MCP Server for Bar Assistant - intelligent cocktail search and recipe retrieval",
   "main": "dist/bar-assistant-mcp-server.js",
   "type": "module",

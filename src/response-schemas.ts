@@ -59,6 +59,8 @@ export interface CocktailDetails {
   tags?: string[];
   /** Direct link to cocktail page */
   direct_link?: string;
+  /** Direct URL to the main cocktail image */
+  image_url?: string;
 }
 
 // Single cocktail result structure

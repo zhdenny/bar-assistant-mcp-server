@@ -64,7 +64,10 @@
   - Servers must call `res.flushHeaders()` immediately and write a dummy `: keep-alive\n\n` comment to force connection establishment.
 - Security:
   - Optional `helmet` header protection.
-  - Mandatory token authentication via the `MCP_SSE_TOKEN` environment variable on all SSE endpoints (`/sse`, `/message`, `/debug`). Clients must authenticate via:
+  - Mandatory token authentication via the `MCP_SSE_TOKEN` environment variable on all SSE endpoints (`/sse`, `/message`, `/debug`).
+  - **Token Normalization**: Server and client tokens are normalized (quotes and whitespace stripped) prior to comparison.
+  - **Active Session Bypass**: Requests using a session ID that matches a currently active session in `transports` bypass token validation. This avoids authentication failures if proxy routing or client settings omit credentials on subsequent messages.
+  - Otherwise, clients must authenticate via:
     - `Authorization` header (e.g., `Bearer <token>` or plain `<token>`).
     - Query parameter (e.g., `?token=<token>`, `?apiKey=<token>`, or `?api_key=<token>`).
 ---

@@ -1,10 +1,10 @@
-# Agent — Bar Assistant MCP Server (v1.0.7) — 2026-06-13
+# Agent — Bar Assistant MCP Server (v1.0.8) — 2026-06-16
 
 > **Strict Rule**: Read this file at every session start.
 
 ## Project Setup
 - **Project Name**: Bar Assistant MCP Server
-- **Version**: 1.0.7 — use bump script only, never manually edit
+- **Version**: 1.0.8 — use bump script only, never manually edit
 - **Status**: Active
 - **Tech Stack**: Node.js, TypeScript, Express, Axios, MCP SDK
 - **Context Anchors**: None
@@ -85,6 +85,11 @@ Code blocks, commit messages, PR descriptions: write normal always.
 > Add project-specific state, quick-reference data, or active constraints here (e.g., board status, feature flags, intentional quirks).
 
 ---
+
+*v1.0.8 — 2026-06-16*
+- Added SSE active session authentication bypass to allow clients/proxies to omit credentials after handshake.
+- Normalized incoming and server-side authentication tokens by stripping quotes and whitespace before comparison.
+- Added TDD unit tests to verify active session authentication bypass and token quote normalization.
 
 *v1.0.7 — 2026-06-13*
 - Added support for getting and using cocktail images in any response.

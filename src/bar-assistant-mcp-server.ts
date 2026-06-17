@@ -33,6 +33,18 @@ import { CacheManager } from './cache-manager.js';
 import { QueryParser } from './query-parser.js';
 
 /**
+ * Normalizes tokens by trimming spaces and stripping wrapping single/double quotes.
+ */
+export function normalizeToken(token: string): string {
+  if (!token) return '';
+  let t = token.trim();
+  if ((t.startsWith("'") && t.endsWith("'")) || (t.startsWith('"') && t.endsWith('"'))) {
+    t = t.substring(1, t.length - 1);
+  }
+  return t.trim();
+}
+
+/**
  * Validates the SSE token against the request.
  * Supports token extraction from:
  * - Authorization header (Bearer or plain)
@@ -42,21 +54,30 @@ export function validateSSEToken(req: any, sseToken: string): boolean {
   if (!sseToken) {
     return false;
   }
+
+  const normalizedServerToken = normalizeToken(sseToken);
+  if (!normalizedServerToken) {
+    return false;
+  }
   
   // 1. Check Authorization header
   const authHeader = req.headers?.['authorization'] || req.headers?.['Authorization'];
   if (authHeader) {
-    const parts = authHeader.split(' ');
-    const token = parts.length > 1 && parts[0].toLowerCase() === 'bearer' ? parts[1] : authHeader;
-    if (token.trim() === sseToken.trim()) {
+    let token = authHeader;
+    if (authHeader.toLowerCase().startsWith('bearer ')) {
+      token = authHeader.slice(7);
+    }
+    if (normalizeToken(token) === normalizedServerToken) {
       return true;
     }
   }
 
   // 2. Check query parameters
   const queryToken = req.query?.token || req.query?.apiKey || req.query?.api_key || req.query?.['api-key'];
-  if (queryToken && typeof queryToken === 'string' && queryToken.trim() === sseToken.trim()) {
-    return true;
+  if (queryToken && typeof queryToken === 'string') {
+    if (normalizeToken(queryToken) === normalizedServerToken) {
+      return true;
+    }
   }
 
   return false;
@@ -2198,17 +2219,26 @@ Returns detailed ingredient information including:
     });
     app.use(limiter);
 
+    // Keep track of active transports by session ID
+    const transports: Record<string, any> = {};
+
     // Authentication middleware
     const authenticate = (req: Request, res: Response, next: NextFunction) => {
+      const sessionId = (req.headers['mcp-session-id'] as string) || 
+                        (req.query.sessionId as string) || 
+                        (req.query.session_id as string);
+
+      if (sessionId && transports[sessionId]) {
+        // Active session ID bypasses token auth
+        return next();
+      }
+
       if (!validateSSEToken(req, sseToken)) {
         res.status(401).json({ error: 'Unauthorized' });
         return;
       }
       next();
     };
-
-    // Keep track of active transports by session ID
-    const transports: Record<string, any> = {};
 
     app.get('/sse', authenticate, async (req, res) => {
       const sessionId = (req.headers['mcp-session-id'] as string) || 

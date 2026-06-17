@@ -69,6 +69,7 @@ class BarAssistantTester {
             { name: 'Unit Tests: SSE Session Routing', fn: () => this.testSSESessionRouting() },
             { name: 'Unit Tests: Token Normalization (Quotes)', fn: () => this.testTokenNormalizationQuotes() },
             { name: 'Unit Tests: SSE Authentication', fn: () => this.testSSEAuthentication() },
+            { name: 'Unit Tests: SSE Active Session Bypass', fn: () => this.testSSEActiveSessionBypass() },
             { name: 'Unit Tests: Cocktail Image Support', fn: () => this.testCocktailImageSupport() },
             { name: 'Docker Deployment and Connectivity Test', fn: () => this.testDockerDeployment() },
         ];
@@ -500,14 +501,7 @@ class BarAssistantTester {
 
     async testTokenNormalizationQuotes(): Promise<boolean> {
         console.log('   🧪 Running token and URL quote stripping normalization test');
-        const stripQuotes = (token: string): string => {
-            if (!token) return '';
-            let t = token.trim();
-            if ((t.startsWith("'") && t.endsWith("'")) || (t.startsWith('"') && t.endsWith('"'))) {
-                t = t.substring(1, t.length - 1);
-            }
-            return t.trim();
-        };
+        const { normalizeToken } = await import('../bar-assistant-mcp-server.js');
 
         const testCases = [
             { input: "'my-secret-token'", expected: "my-secret-token" },
@@ -519,7 +513,7 @@ class BarAssistantTester {
 
         let allPassed = true;
         for (const tc of testCases) {
-            const result = stripQuotes(tc.input);
+            const result = normalizeToken(tc.input);
             console.log(`     Input: "${tc.input}" -> Result: "${result}"`);
             if (result !== tc.expected) {
                 console.error(`     ❌ Expected "${tc.expected}", got "${result}"`);
@@ -564,6 +558,20 @@ class BarAssistantTester {
                 expected: true,
                 desc: 'Valid query parameter (?api_key=...)'
             },
+            // Valid token with quotes in server token configuration
+            {
+                req: { headers: { authorization: 'Bearer my-secret-sse-token' } },
+                tokenOverride: "'my-secret-sse-token'",
+                expected: true,
+                desc: 'Valid token with quotes in server token configuration'
+            },
+            // Valid token with quotes in request header
+            {
+                req: { headers: { authorization: "Bearer 'my-secret-sse-token'" } },
+                tokenOverride: "my-secret-sse-token",
+                expected: true,
+                desc: 'Valid token with quotes in request Authorization header'
+            },
             // Invalid token in header
             {
                 req: { headers: { authorization: 'Bearer wrong-token' } },
@@ -583,7 +591,8 @@ class BarAssistantTester {
         const { validateSSEToken } = await import('../bar-assistant-mcp-server.js');
 
         for (const tc of testCases) {
-            const result = validateSSEToken(tc.req, token);
+            const t = (tc as any).tokenOverride || token;
+            const result = validateSSEToken(tc.req, t);
             if (result === tc.expected) {
                 console.log(`     ✅ Passed: ${tc.desc}`);
             } else {
@@ -592,6 +601,66 @@ class BarAssistantTester {
             }
         }
 
+        return allPassed;
+    }
+
+    async testSSEActiveSessionBypass(): Promise<boolean> {
+        console.log('   🧪 Running SSE Active Session Bypass unit test');
+        const transports: Record<string, any> = {
+            'active-session-123': { sessionId: 'active-session-123' }
+        };
+
+        const authenticate = (req: any, sseToken: string, validateSSETokenFn: any): boolean => {
+            const sessionId = (req.headers?.['mcp-session-id'] as string) || 
+                              (req.query?.sessionId as string) || 
+                              (req.query?.session_id as string);
+
+            if (sessionId && transports[sessionId]) {
+                return true; // Bypassed
+            }
+
+            return validateSSETokenFn(req, sseToken);
+        };
+
+        const { validateSSEToken } = await import('../bar-assistant-mcp-server.js');
+        const token = 'my-secret-token';
+
+        const testCases = [
+            // Request with active session and no token -> should pass
+            {
+                req: { headers: { 'mcp-session-id': 'active-session-123' } },
+                expected: true,
+                desc: 'Bypass auth with active mcp-session-id header'
+            },
+            {
+                req: { query: { sessionId: 'active-session-123' } },
+                expected: true,
+                desc: 'Bypass auth with active sessionId query parameter'
+            },
+            // Request with inactive session and no token -> should fail
+            {
+                req: { headers: { 'mcp-session-id': 'inactive-session' } },
+                expected: false,
+                desc: 'Do not bypass auth with inactive mcp-session-id header'
+            },
+            // Request with active session and invalid token -> should still pass
+            {
+                req: { headers: { 'mcp-session-id': 'active-session-123', authorization: 'Bearer wrong-token' } },
+                expected: true,
+                desc: 'Bypass auth with active session despite invalid Bearer token'
+            }
+        ];
+
+        let allPassed = true;
+        for (const tc of testCases) {
+            const result = authenticate(tc.req, token, validateSSEToken);
+            if (result === tc.expected) {
+                console.log(`     ✅ Passed: ${tc.desc}`);
+            } else {
+                console.error(`     ❌ Failed: ${tc.desc} - Expected ${tc.expected}, got ${result}`);
+                allPassed = false;
+            }
+        }
         return allPassed;
     }
 

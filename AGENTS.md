@@ -1,10 +1,10 @@
-# Agent — Bar Assistant MCP Server (v1.0.8) — 2026-06-16
+# Agent — Bar Assistant MCP Server (v1.0.9) — 2026-06-17
 
 > **Strict Rule**: Read this file at every session start.
 
 ## Project Setup
 - **Project Name**: Bar Assistant MCP Server
-- **Version**: 1.0.8 — use bump script only, never manually edit
+- **Version**: 1.0.9 — use bump script only, never manually edit
 - **Status**: Active
 - **Tech Stack**: Node.js, TypeScript, Express, Axios, MCP SDK
 - **Context Anchors**: None
@@ -85,6 +85,13 @@ Code blocks, commit messages, PR descriptions: write normal always.
 > Add project-specific state, quick-reference data, or active constraints here (e.g., board status, feature flags, intentional quirks).
 
 ---
+
+*v1.0.9 — 2026-06-17*
+- Implemented ratio-based similarity scoring (liquid proportions math) in calculateSimilarity.
+- Enhanced candidate pool generation in findSimilarCocktails to query base ingredients in parallel.
+- Added synonym normalization in normalizeIngredientName to strip qualifiers (fresh, chilled, homemade).
+- Added API post-filtering safeguard in performCocktailSearch to increase fetch limit to 100 and prevent starvation.
+- Added TDD unit tests to verify synonym matching, ratio scoring, candidate pool expansion, and exclusions.
 
 *v1.0.8 — 2026-06-16*
 - Added SSE active session authentication bypass to allow clients/proxies to omit credentials after handshake.

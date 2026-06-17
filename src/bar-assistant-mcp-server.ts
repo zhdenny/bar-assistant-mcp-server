@@ -667,8 +667,14 @@ class BarAssistantMCPServer {
    */
   private async performCocktailSearch(args: any) {
     // Build search parameters
+    const needsPostFiltering = 
+      (args.must_include && args.must_include.length > 1) ||
+      (args.must_exclude && args.must_exclude.length > 0) ||
+      args.glass_type ||
+      args.preparation_method;
+
     const searchParams: SearchCocktailsParams = {
-      limit: args.limit || 20,
+      limit: needsPostFiltering ? 100 : (args.limit || 20),
     };
 
     let searchType = 'general';

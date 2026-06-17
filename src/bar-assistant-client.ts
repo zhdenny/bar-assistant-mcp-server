@@ -152,11 +152,13 @@ export class BarAssistantClient {
       // First get the base cocktail to understand its profile
       const baseCocktail = await this.getCocktailRecipe(cocktailId);
       
-      // Extract key ingredients for similarity matching - use short_ingredients for consistency
-      const baseIngredients = (baseCocktail.short_ingredients || baseCocktail.ingredients)?.map((ing: any) => {
+      // Extract key ingredients for similarity matching
+      const baseIngredientNames = (baseCocktail.short_ingredients || baseCocktail.ingredients)?.map((ing: any) => {
         const name = ing.ingredient?.name || ing.name || 'unknown';
         return name.toLowerCase();
       }) || [];
+      
+      const baseIngredientsFull = baseCocktail.ingredients || baseCocktail.short_ingredients || [];
       
       // Get a broader set of cocktails to analyze for similarity
       const searchParams: SearchCocktailsParams = {
@@ -166,22 +168,21 @@ export class BarAssistantClient {
       // Try multiple search strategies to find potentially similar cocktails
       const allPotentialMatches = new Map<number, any>();
       
-      // Strategy 1: Search by each key ingredient
-      for (const ingredient of baseIngredients.slice(0, 3)) { // Top 3 ingredients
-        try {
-          const results = await this.searchCocktails({ 
-            ingredient: ingredient, 
-            limit: 50 
-          });
-          results.data.forEach(cocktail => {
-            if (cocktail.id !== cocktailId) {
-              allPotentialMatches.set(cocktail.id, cocktail);
-            }
-          });
-        } catch (error) {
-          // Continue if one ingredient search fails
-        }
-      }
+      // Strategy 1: Search by each key ingredient in parallel
+      const searchPromises = baseIngredientNames.map(ingredient => 
+        this.searchCocktails({ ingredient, limit: 50 })
+          .then(results => {
+            results.data.forEach(cocktail => {
+              if (cocktail.id !== cocktailId) {
+                allPotentialMatches.set(cocktail.id, cocktail);
+              }
+            });
+          })
+          .catch(err => {
+            // Ignore individual search failures
+          })
+      );
+      await Promise.all(searchPromises);
       
       // Strategy 2: If we don't have enough matches, do a general search
       if (allPotentialMatches.size < limit * 3) {
@@ -225,12 +226,9 @@ export class BarAssistantClient {
       const similarCocktails: SimilarCocktail[] = Array.from(detailedCocktails.values())
         .map(cocktail => {
           // Extract ingredients from full cocktail details
-          const cocktailIngredients = (cocktail.short_ingredients || cocktail.ingredients)?.map((ing: any) => {
-            const name = ing.ingredient?.name || ing.name || 'unknown';
-            return name.toLowerCase();
-          }) || [];
+          const cocktailIngredientsFull = cocktail.ingredients || cocktail.short_ingredients || [];
           
-          const similarity = this.calculateSimilarity(baseIngredients, cocktailIngredients);
+          const similarity = this.calculateSimilarity(baseIngredientsFull, cocktailIngredientsFull);
           const reasons = this.getSimilarityReasons(baseCocktail, cocktail);
           
           return {
@@ -435,28 +433,102 @@ export class BarAssistantClient {
     return null;
   }
 
-  private calculateSimilarity(ingredients1: string[], ingredients2: string[]): number {
+  private getLiquidVolumeInMl(amount: number | undefined, units: string | undefined): number {
+    if (!amount || !units) return 0;
+    const normalizedUnits = units.toLowerCase().trim();
+    if (normalizedUnits.startsWith('oz') || normalizedUnits.startsWith('ounce')) {
+      return amount * 29.57;
+    }
+    if (normalizedUnits.startsWith('cl')) {
+      return amount * 10;
+    }
+    if (normalizedUnits.startsWith('ml')) {
+      return amount;
+    }
+    if (normalizedUnits.startsWith('tsp') || normalizedUnits.startsWith('tea')) {
+      return amount * 5;
+    }
+    if (normalizedUnits.startsWith('tbsp') || normalizedUnits.startsWith('table')) {
+      return amount * 15;
+    }
+    if (normalizedUnits.startsWith('dash')) {
+      return amount * 1.0;
+    }
+    if (normalizedUnits.startsWith('drop')) {
+      return amount * 0.05;
+    }
+    if (normalizedUnits.startsWith('part')) {
+      return amount;
+    }
+    return 0;
+  }
+
+  private calculateSimilarity(ingredients1: any[], ingredients2: any[]): number {
     if (ingredients1.length === 0 || ingredients2.length === 0) return 0;
     
-    const set1 = new Set(ingredients1.map(ing => this.normalizeIngredientName(ing)));
-    const set2 = new Set(ingredients2.map(ing => this.normalizeIngredientName(ing)));
+    const names1 = ingredients1.map(ing => (typeof ing === 'string' ? ing : (ing.name || ing.ingredient?.name || 'unknown')));
+    const names2 = ingredients2.map(ing => (typeof ing === 'string' ? ing : (ing.name || ing.ingredient?.name || 'unknown')));
+
+    const set1 = new Set(names1.map(ing => this.normalizeIngredientName(ing)));
+    const set2 = new Set(names2.map(ing => this.normalizeIngredientName(ing)));
     
     // Calculate basic Jaccard similarity
     const intersection = new Set([...set1].filter(x => set2.has(x)));
     const union = new Set([...set1, ...set2]);
     const basicSimilarity = union.size > 0 ? intersection.size / union.size : 0;
     
+    // Calculate ratio similarity for shared liquid ingredients
+    let ratioPenalty = 0;
+
+    const totalVol1 = ingredients1.reduce((sum, ing) => {
+      if (typeof ing === 'string') return sum;
+      return sum + this.getLiquidVolumeInMl(ing.pivot?.amount || ing.amount, ing.pivot?.units || ing.units);
+    }, 0);
+    const totalVol2 = ingredients2.reduce((sum, ing) => {
+      if (typeof ing === 'string') return sum;
+      return sum + this.getLiquidVolumeInMl(ing.pivot?.amount || ing.amount, ing.pivot?.units || ing.units);
+    }, 0);
+
+    if (totalVol1 > 0 && totalVol2 > 0) {
+      let diffSum = 0;
+      let sharedCount = 0;
+      for (const ing1 of ingredients1) {
+        if (typeof ing1 === 'string') continue;
+        const name1Normalized = this.normalizeIngredientName(ing1.name || ing1.ingredient?.name || 'unknown');
+        if (intersection.has(name1Normalized)) {
+          const ing2 = ingredients2.find(i => {
+            if (typeof i === 'string') return false;
+            return this.normalizeIngredientName(i.name || i.ingredient?.name || 'unknown') === name1Normalized;
+          });
+          if (ing2) {
+            const vol1 = this.getLiquidVolumeInMl(ing1.pivot?.amount || ing1.amount, ing1.pivot?.units || ing1.units);
+            const vol2 = this.getLiquidVolumeInMl(ing2.pivot?.amount || ing2.amount, ing2.pivot?.units || ing2.units);
+            if (vol1 > 0 && vol2 > 0) {
+              const ratio1 = vol1 / totalVol1;
+              const ratio2 = vol2 / totalVol2;
+              diffSum += Math.abs(ratio1 - ratio2);
+              sharedCount++;
+            }
+          }
+        }
+      }
+      if (sharedCount > 0) {
+        // Average absolute difference * 0.25 penalty weight
+        ratioPenalty = (diffSum / sharedCount) * 0.25;
+      }
+    }
+
     // Boost score for shared base spirits (more important)
-    const spirits1 = ingredients1.filter(ing => this.isBaseSpirit(ing));
-    const spirits2 = ingredients2.filter(ing => this.isBaseSpirit(ing));
+    const spirits1 = names1.filter(ing => this.isBaseSpirit(ing));
+    const spirits2 = names2.filter(ing => this.isBaseSpirit(ing));
     const sharedSpirits = spirits1.filter(spirit => 
       spirits2.some(s => this.normalizeIngredientName(spirit) === this.normalizeIngredientName(s))
     );
     const spiritBonus = sharedSpirits.length > 0 ? 0.25 : 0;
     
     // Boost score for shared key modifiers (vermouth, bitters, etc.)
-    const modifiers1 = ingredients1.filter(ing => this.isKeyModifier(ing));
-    const modifiers2 = ingredients2.filter(ing => this.isKeyModifier(ing));
+    const modifiers1 = names1.filter(ing => this.isKeyModifier(ing));
+    const modifiers2 = names2.filter(ing => this.isKeyModifier(ing));
     const sharedModifiers = modifiers1.filter(mod => 
       modifiers2.some(m => this.normalizeIngredientName(mod) === this.normalizeIngredientName(m))
     );
@@ -465,7 +537,8 @@ export class BarAssistantClient {
     // Additional bonus for matching multiple ingredients
     const ingredientCountBonus = intersection.size >= 2 ? 0.1 : 0;
     
-    return Math.min(1.0, basicSimilarity + spiritBonus + modifierBonus + ingredientCountBonus);
+    const baseScore = Math.min(1.0, basicSimilarity + spiritBonus + modifierBonus + ingredientCountBonus);
+    return Math.max(0.0, baseScore - ratioPenalty);
   }
   
   private normalizeIngredientName(ingredient: string): string {
@@ -473,6 +546,7 @@ export class BarAssistantClient {
       .replace(/\s+/g, ' ')
       .replace(/,.*$/, '') // Remove everything after comma
       .replace(/\([^)]*\)/g, '') // Remove parenthetical content non-greedily
+      .replace(/\b(freshly squeezed|freshly|fresh|organic|squeezed|chilled|homemade|sweetened|unsweetened)\b/g, '') // strip qualifiers
       .replace(/\s+/g, ' ') // Clean up extra spaces
       .trim();
   }

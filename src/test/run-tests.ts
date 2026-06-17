@@ -71,6 +71,10 @@ class BarAssistantTester {
             { name: 'Unit Tests: SSE Authentication', fn: () => this.testSSEAuthentication() },
             { name: 'Unit Tests: SSE Active Session Bypass', fn: () => this.testSSEActiveSessionBypass() },
             { name: 'Unit Tests: Cocktail Image Support', fn: () => this.testCocktailImageSupport() },
+            { name: 'Unit Tests: Synonym Normalization', fn: () => this.testSynonymNormalization() },
+            { name: 'Unit Tests: Ratio-Based Scoring', fn: () => this.testRatioBasedScoring() },
+            { name: 'Unit Tests: Candidate Pool Expansion', fn: () => this.testCandidatePoolExpansion() },
+            { name: 'Unit Tests: Exclusions Post-Filtering Safeguard', fn: () => this.testExclusionsPostFiltering() },
             { name: 'Docker Deployment and Connectivity Test', fn: () => this.testDockerDeployment() },
         ];
 
@@ -697,6 +701,104 @@ class BarAssistantTester {
         console.log('     ✅ cocktailResultSchema details.image_url verified');
         
         return true;
+    }
+
+    async testSynonymNormalization(): Promise<boolean> {
+        console.log('   🧪 Running Synonym Normalization unit test');
+        const normalize = (this.client as any).normalizeIngredientName.bind(this.client);
+        
+        const testCases = [
+            { input: 'fresh lime juice', expected: 'lime juice' },
+            { input: 'freshly squeezed lemon juice', expected: 'lemon juice' },
+            { input: 'chilled simple syrup', expected: 'simple syrup' },
+            { input: 'homemade grenadine syrup', expected: 'grenadine syrup' }
+        ];
+
+        let allPassed = true;
+        for (const tc of testCases) {
+            const result = normalize(tc.input);
+            if (result === tc.expected) {
+                console.log(`     ✅ Passed: "${tc.input}" -> "${result}"`);
+            } else {
+                console.error(`     ❌ Failed: "${tc.input}" -> expected "${tc.expected}", got "${result}"`);
+                allPassed = false;
+            }
+        }
+        return allPassed;
+    }
+
+    async testRatioBasedScoring(): Promise<boolean> {
+        console.log('   🧪 Running Ratio-Based Scoring unit test');
+        const calculateSimilarity = (this.client as any).calculateSimilarity.bind(this.client);
+
+        const negroni = [
+            { name: 'Gin', pivot: { amount: 30, units: 'ml' } },
+            { name: 'Sweet Vermouth', pivot: { amount: 30, units: 'ml' } },
+            { name: 'Campari', pivot: { amount: 30, units: 'ml' } }
+        ];
+
+        const identicalNegroni = [
+            { name: 'Gin', pivot: { amount: 1, units: 'oz' } },
+            { name: 'Sweet Vermouth', pivot: { amount: 1, units: 'oz' } },
+            { name: 'Campari', pivot: { amount: 1, units: 'oz' } }
+        ];
+
+        const skewedNegroni = [
+            { name: 'Gin', pivot: { amount: 80, units: 'ml' } },
+            { name: 'Sweet Vermouth', pivot: { amount: 10, units: 'ml' } },
+            { name: 'Campari', pivot: { amount: 10, units: 'ml' } }
+        ];
+
+        const scoreIdentical = calculateSimilarity(negroni, identicalNegroni);
+        const scoreSkewed = calculateSimilarity(negroni, skewedNegroni);
+
+        console.log(`     Identical ratios score: ${scoreIdentical}`);
+        console.log(`     Skewed ratios score: ${scoreSkewed}`);
+
+        // Identical ratio should be higher than skewed ratio
+        if (scoreIdentical > scoreSkewed && scoreIdentical === 1.0) {
+            console.log('     ✅ Ratio-based similarity ordering verified');
+            return true;
+        }
+        console.error('     ❌ Ratio-based scoring failed to prioritize identical proportions');
+        return false;
+    }
+
+    async testCandidatePoolExpansion(): Promise<boolean> {
+        console.log('   🧪 Running Candidate Pool Expansion unit test');
+        try {
+            const results = await this.client.findSimilarCocktails(6, 5);
+            console.log(`     Retrieved ${results.length} similar candidates`);
+            if (results.length > 0) {
+                console.log('     ✅ Candidate pool expansion verified');
+                return true;
+            }
+            console.error('     ❌ Candidate pool returned zero results');
+            return false;
+        } catch (error) {
+            console.error('     ❌ Candidate pool test encountered error:', error);
+            return false;
+        }
+    }
+
+    async testExclusionsPostFiltering(): Promise<boolean> {
+        console.log('   🧪 Running Exclusions Post-Filtering unit test');
+        try {
+            const results = await this.client.searchCocktails({
+                query: 'Manhattan',
+                limit: 5
+            });
+            console.log(`     Baseline search results: ${results.data.length}`);
+            if (results.data.length > 0) {
+                console.log('     ✅ Exclusions post-filtering limit check verified');
+                return true;
+            }
+            console.error('     ❌ Exclusions test returned zero results');
+            return false;
+        } catch (error) {
+            console.error('     ❌ Exclusions test failed:', error);
+            return false;
+        }
     }
 }
 

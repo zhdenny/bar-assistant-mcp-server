@@ -42,7 +42,8 @@
 | `BAR_ASSISTANT_URL` | Yes | None | Base URL of the Bar Assistant instance |
 | `BAR_ASSISTANT_TOKEN` | Yes | None | API token for authentication |
 | `BAR_ASSISTANT_BAR_ID` | No | `1` | Bar ID context for queries |
-| `PORT` | No | `3001` | Server port used in SSE mode |
+| `PORT` | No | `3001` | Server port used in SSE/gateway modes |
+| `MCP_SSE_TOKEN` | Yes (in SSE/gateway) | None | Token for client authentication in SSE and gateway modes |
 
 ### Docker Deployment Configurations
 
@@ -51,9 +52,10 @@
 | Default SSE Port | `3001` | Port exposed by Docker container |
 | Image Name | `zhdenny/bar-assistant-mcp-server:latest` | Public Docker Registry image name |
 | Unraid Icon Label | `net.unraid.docker.icon` | Bound to `/mnt/user/appdata/bar-assistant/icon.png` |
+| Google Antigravity Volume | `/root/.gemini:/root/.gemini` | Mount config/credentials for agy execution |
 
 ---
 
-*v1.0.0 — 2026-06-10*
+*v1.0.1 — 2026-06-19*
 
 

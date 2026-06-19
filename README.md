@@ -47,6 +47,14 @@ The only supported method for running the server is with Docker Compose.
 
     The server will be available at `http://localhost:3001`.
 
+## PourOver API Gateway
+
+This server includes an integrated API Gateway to support the PourOver mobile application, providing natural language query streaming using Google Antigravity CLI (`agy`).
+
+- **Endpoint**: `POST /query`
+- **Authentication**: Secured with `MCP_SSE_TOKEN` passed via the `x-api-key` header (or standard Authorization/query parameters).
+- **Format**: Takes a JSON body `{"query": "your query"}` and streams response chunks back in `text/plain`.
+
 ## Usage
 
 Once configured, you can interact with the server through your MCP client. Here are some example queries:
@@ -55,5 +63,3 @@ Once configured, you can interact with the server through your MCP client. Here 
 - *"Show me the recipe for a Manhattan"*
 - *"Give me recommendations on cocktails like a Negroni"*
 - *"What ingredients do I need to buy to make these 5 cocktails?"*
-- *"Show me how to make a Manhattan"*
-- *"What cocktails can I make with gin and vermouth?"*

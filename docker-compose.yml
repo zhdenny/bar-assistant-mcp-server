@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   bar-assistant-mcp-server:
     image: zhdenny/bar-assistant-mcp-server:latest

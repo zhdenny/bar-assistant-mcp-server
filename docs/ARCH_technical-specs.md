@@ -70,6 +70,13 @@
   - Otherwise, clients must authenticate via:
     - `Authorization` header (e.g., `Bearer <token>` or plain `<token>`).
     - Query parameter (e.g., `?token=<token>`, `?apiKey=<token>`, or `?api_key=<token>`).
+
+### 3. PourOver Gateway Mode (Unified)
+- Exposes a unified POST `/query` endpoint on the same Express server port.
+- Authenticates using `MCP_SSE_TOKEN` (supports `Authorization` header, `x-api-key` header, or query parameters).
+- Validates that the query is non-empty.
+- Spawns the Google Antigravity CLI (`agy`) as a child process and streams its stdout/stderr directly back to the client using `text/plain` media type.
+- Returns FastAPI-compatible error responses: `{"detail": "<error_message>"}` on failure.
 ---
 
 ## API Client Integration

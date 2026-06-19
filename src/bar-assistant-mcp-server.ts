@@ -4,6 +4,7 @@ import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { SSEServerTransport } from '@modelcontextprotocol/sdk/server/sse.js';
 import express, { Request, Response, NextFunction } from 'express';
+import { spawn } from 'child_process';
 import cors from 'cors';
 import helmet from 'helmet';
 import morgan from 'morgan';
@@ -72,6 +73,14 @@ export function validateSSEToken(req: any, sseToken: string): boolean {
     }
   }
 
+  // 1b. Check X-API-Key header for gateway compatibility
+  const xApiKeyHeader = req.headers?.['x-api-key'] || req.headers?.['X-API-Key'];
+  if (xApiKeyHeader && typeof xApiKeyHeader === 'string') {
+    if (normalizeToken(xApiKeyHeader) === normalizedServerToken) {
+      return true;
+    }
+  }
+
   // 2. Check query parameters
   const queryToken = req.query?.token || req.query?.apiKey || req.query?.api_key || req.query?.['api-key'];
   if (queryToken && typeof queryToken === 'string') {
@@ -134,7 +143,7 @@ class StreamableHTTPTransport {
  * Provides natural language access to Bar Assistant cocktail database
  * through Model Context Protocol tools
  */
-class BarAssistantMCPServer {
+export class BarAssistantMCPServer {
   private server: Server;
   private barClient: BarAssistantClient;
   private cacheManager: CacheManager;
@@ -2349,6 +2358,52 @@ Returns detailed ingredient information including:
       res.json({
         ready: true,
         BAR_ASSISTANT_URL: process.env.BAR_ASSISTANT_URL,
+      });
+    });
+
+    app.post('/query', (req: Request, res: Response) => {
+      if (!validateSSEToken(req, sseToken)) {
+        res.status(401).json({ detail: 'Invalid Token' });
+        return;
+      }
+
+      const query = req.body?.query;
+      if (!query || typeof query !== 'string' || query.trim() === '') {
+        res.status(400).json({ detail: 'Query cannot be empty' });
+        return;
+      }
+
+      res.writeHead(200, {
+        'Content-Type': 'text/plain; charset=utf-8',
+        'Cache-Control': 'no-cache, no-transform',
+        'Connection': 'keep-alive',
+        'X-Accel-Buffering': 'no',
+      });
+      res.flushHeaders();
+
+      const agyProcess = spawn('agy', ['-p', query, '--dangerously-skip-permissions'], {
+        stdio: ['ignore', 'pipe', 'pipe'],
+        env: {
+          ...process.env,
+          PYTHONUNBUFFERED: '1',
+        },
+      });
+
+      agyProcess.stdout.on('data', (chunk) => {
+        res.write(chunk);
+      });
+
+      agyProcess.stderr.on('data', (chunk) => {
+        res.write(chunk);
+      });
+
+      agyProcess.on('close', () => {
+        res.end();
+      });
+
+      agyProcess.on('error', (err) => {
+        console.error('Failed to start agy process:', err);
+        res.end();
       });
     });
 

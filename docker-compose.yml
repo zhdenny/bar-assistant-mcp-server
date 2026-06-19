@@ -1,3 +1,5 @@
+version: '3.8'
+
 services:
   bar-assistant-mcp-server:
     image: zhdenny/bar-assistant-mcp-server:latest
@@ -5,9 +7,12 @@ services:
     command: node dist/bar-assistant-mcp-server.js --sse
     restart: unless-stopped
     ports:
-      - "3001:3001"
+      - "${PORT:-3001}:${PORT:-3001}"
     env_file:
       - ./.env
+    volumes:
+      # Mount the targeted .gemini configuration directory for agy access
+      - /root/.gemini:/root/.gemini
     labels:
       net.unraid.docker.icon: "/mnt/user/appdata/bar-assistant/icon.png"
     # Optionally, you can add a healthcheck

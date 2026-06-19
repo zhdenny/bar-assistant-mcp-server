@@ -75,6 +75,7 @@ class BarAssistantTester {
             { name: 'Unit Tests: Ratio-Based Scoring', fn: () => this.testRatioBasedScoring() },
             { name: 'Unit Tests: Candidate Pool Expansion', fn: () => this.testCandidatePoolExpansion() },
             { name: 'Unit Tests: Exclusions Post-Filtering Safeguard', fn: () => this.testExclusionsPostFiltering() },
+            { name: 'Unit Tests: Query Gateway Endpoint', fn: () => this.testQueryGatewayEndpoint() },
             { name: 'Docker Deployment and Connectivity Test', fn: () => this.testDockerDeployment() },
         ];
 
@@ -538,6 +539,18 @@ class BarAssistantTester {
                 expected: true,
                 desc: 'Valid Bearer Authorization header'
             },
+            // Valid token via x-api-key header
+            {
+                req: { headers: { 'x-api-key': 'my-secret-sse-token' } },
+                expected: true,
+                desc: 'Valid x-api-key header'
+            },
+            // Valid token via X-API-Key header (case variation)
+            {
+                req: { headers: { 'X-API-Key': 'my-secret-sse-token' } },
+                expected: true,
+                desc: 'Valid X-API-Key header (case variation)'
+            },
             // Valid token via header (plain)
             {
                 req: { headers: { authorization: 'my-secret-sse-token' } },
@@ -799,6 +812,107 @@ class BarAssistantTester {
             console.error('     ❌ Exclusions test failed:', error);
             return false;
         }
+    }
+
+    async testQueryGatewayEndpoint(): Promise<boolean> {
+        console.log('   🧪 Running POST /query gateway endpoint tests');
+        
+        const testPort = 3003;
+        const testToken = 'gateway-test-token-123';
+        process.env.MCP_SSE_TOKEN = testToken;
+        process.env.PORT = String(testPort);
+
+        const { BarAssistantMCPServer } = await import('../bar-assistant-mcp-server.js');
+        const serverInstance = new BarAssistantMCPServer();
+        
+        // Start the server in background
+        serverInstance.runSSE(testPort).catch((err: any) => {
+            console.error('     Express server error:', err);
+        });
+
+        // Wait for server to start
+        await new Promise(resolve => setTimeout(resolve, 500));
+
+        let allPassed = true;
+
+        // Helper to perform POST /query
+        const performQuery = (headers: Record<string, string>, body: any): Promise<{ statusCode: number; data: string }> => {
+            return new Promise((resolve, reject) => {
+                const req = http.request({
+                    hostname: 'localhost',
+                    port: testPort,
+                    path: '/query',
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        ...headers
+                    }
+                }, (res) => {
+                    let data = '';
+                    res.on('data', chunk => data += chunk);
+                    res.on('end', () => resolve({ statusCode: res.statusCode || 0, data }));
+                });
+                req.on('error', reject);
+                req.write(JSON.stringify(body));
+                req.end();
+            });
+        };
+
+        try {
+            // 1. Test unauthenticated request
+            console.log('     Testing unauthenticated request...');
+            const res1 = await performQuery({}, { query: 'what is 2+2' });
+            if (res1.statusCode !== 401) {
+                console.error(`     ❌ Expected 401, got ${res1.statusCode}`);
+                allPassed = false;
+            } else {
+                const body = JSON.parse(res1.data);
+                if (body.detail !== 'Invalid Token') {
+                    console.error(`     ❌ Expected detail "Invalid Token", got`, body);
+                    allPassed = false;
+                } else {
+                    console.log('     ✅ Unauthenticated request correctly rejected.');
+                }
+            }
+
+            // 2. Test valid authentication but empty query
+            console.log('     Testing empty query with x-api-key...');
+            const res2 = await performQuery({ 'x-api-key': testToken }, { query: '' });
+            if (res2.statusCode !== 400) {
+                console.error(`     ❌ Expected 400, got ${res2.statusCode}`);
+                allPassed = false;
+            } else {
+                const body = JSON.parse(res2.data);
+                if (body.detail !== 'Query cannot be empty') {
+                    console.error(`     ❌ Expected detail "Query cannot be empty", got`, body);
+                    allPassed = false;
+                } else {
+                    console.log('     ✅ Empty query correctly rejected.');
+                }
+            }
+
+            // 3. Test valid request with x-api-key and query
+            console.log('     Testing valid query execution and streaming...');
+            const res3 = await performQuery({ 'x-api-key': testToken }, { query: 'what is 2+2' });
+            if (res3.statusCode !== 200) {
+                console.error(`     ❌ Expected 200, got ${res3.statusCode}`);
+                allPassed = false;
+            } else {
+                const output = res3.data.trim();
+                if (output !== '4') {
+                    console.error(`     ❌ Expected streamed output "4", got "${output}"`);
+                    allPassed = false;
+                } else {
+                    console.log('     ✅ Valid query successfully executed and streamed back.');
+                }
+            }
+
+        } catch (err) {
+            console.error('     ❌ Error during /query tests:', err);
+            allPassed = false;
+        }
+
+        return allPassed;
     }
 }
 

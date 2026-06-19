@@ -1,10 +1,10 @@
-# Agent — Bar Assistant MCP Server (v1.0.9) — 2026-06-17
+# Agent — Bar Assistant MCP Server (v1.0.10) — 2026-06-19
 
 > **Strict Rule**: Read this file at every session start.
 
 ## Project Setup
 - **Project Name**: Bar Assistant MCP Server
-- **Version**: 1.0.9 — use bump script only, never manually edit
+- **Version**: 1.0.10 — use bump script only, never manually edit
 - **Status**: Active
 - **Tech Stack**: Node.js, TypeScript, Express, Axios, MCP SDK
 - **Context Anchors**: None
@@ -85,6 +85,13 @@ Code blocks, commit messages, PR descriptions: write normal always.
 > Add project-specific state, quick-reference data, or active constraints here (e.g., board status, feature flags, intentional quirks).
 
 ---
+
+*v1.0.10 — 2026-06-19*
+- Folded pourover-gateway Python service into bar-assistant-mcp-server Node.js project.
+- Implemented POST /query streaming endpoint via spawn of Google Antigravity CLI (agy) under Express.
+- Unified authentication to use MCP_SSE_TOKEN for both MCP and gateway routes, supporting x-api-key compatibility.
+- Migrated Docker image base to node:18-slim and added agy installation.
+- Added TDD integration tests to verify gateway token verification, error schema, and process output streaming.
 
 *v1.0.9 — 2026-06-17*
 - Implemented ratio-based similarity scoring (liquid proportions math) in calculateSimilarity.

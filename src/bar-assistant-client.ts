@@ -1,4 +1,13 @@
+import http from 'http';
+import https from 'https';
 import axios, { AxiosInstance, AxiosResponse } from 'axios';
+
+const httpAgent = new http.Agent({
+  keepAlive: true,
+});
+const httpsAgent = new https.Agent({
+  keepAlive: true,
+});
 import {
   BarAssistantConfig,
   CocktailSearchResult,
@@ -44,6 +53,8 @@ export class BarAssistantClient {
     this.client = axios.create({
       baseURL: normalizedBaseUrl,
       timeout: config.timeout || 30000,
+      httpAgent,
+      httpsAgent,
       headers: {
         'Authorization': `Bearer ${normalizedToken.replace(/\s/g, '')}`,
         'Content-Type': 'application/json',
@@ -198,29 +209,18 @@ export class BarAssistantClient {
         }
       }
       
-      // Fetch full details for top candidates to get ingredient data
+      // Use candidate search results directly to get ingredient data
       // Limit to top 50 candidates to avoid too many API calls
       const candidateIds = Array.from(allPotentialMatches.keys()).slice(0, 50);
       
       const detailedCocktails = new Map<number, any>();
       
-      // Batch fetch details with parallel requests (groups of 10)
-      const batchSize = 10;
-      for (let i = 0; i < candidateIds.length; i += batchSize) {
-        const batch = candidateIds.slice(i, i + batchSize);
-        const detailPromises = batch.map(id => 
-          this.getCocktailRecipe(id).catch(err => {
-            return null;
-          })
-        );
-        
-        const results = await Promise.all(detailPromises);
-        results.forEach((cocktail, idx) => {
-          if (cocktail) {
-            detailedCocktails.set(batch[idx], cocktail);
-          }
-        });
-      }
+      candidateIds.forEach(id => {
+        const cocktail = allPotentialMatches.get(id);
+        if (cocktail) {
+          detailedCocktails.set(id, cocktail);
+        }
+      });
       
       // Calculate similarity scores using detailed cocktail data
       const similarCocktails: SimilarCocktail[] = Array.from(detailedCocktails.values())
@@ -573,7 +573,7 @@ export class BarAssistantClient {
       const name = ing.ingredient?.name || ing.name || '';
       return this.extractBaseSpirit([name]) !== null;
     }) || [];
-    const spirits2 = cocktail2.short_ingredients?.filter((ing: any) => {
+    const spirits2 = (cocktail2.ingredients || cocktail2.short_ingredients)?.filter((ing: any) => {
       const name = ing.ingredient?.name || ing.name || '';
       return this.extractBaseSpirit([name]) !== null;
     }) || [];
@@ -595,7 +595,7 @@ export class BarAssistantClient {
       const name = ing.ingredient?.name || ing.name || 'unknown';
       return name.toLowerCase();
     }) || [];
-    const ingredients2 = cocktail2.short_ingredients?.map((ing: any) => {
+    const ingredients2 = (cocktail2.ingredients || cocktail2.short_ingredients)?.map((ing: any) => {
       const name = ing.ingredient?.name || ing.name || 'unknown';
       return name.toLowerCase();
     }) || [];

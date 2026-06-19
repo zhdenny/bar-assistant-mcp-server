@@ -1,10 +1,10 @@
-# Agent — Bar Assistant MCP Server (v1.0.10) — 2026-06-19
+# Agent — Bar Assistant MCP Server (v1.0.12) — 2026-06-19
 
 > **Strict Rule**: Read this file at every session start.
 
 ## Project Setup
 - **Project Name**: Bar Assistant MCP Server
-- **Version**: 1.0.10 — use bump script only, never manually edit
+- **Version**: 1.0.12 — use bump script only, never manually edit
 - **Status**: Active
 - **Tech Stack**: Node.js, TypeScript, Express, Axios, MCP SDK
 - **Context Anchors**: None
@@ -85,6 +85,14 @@ Code blocks, commit messages, PR descriptions: write normal always.
 > Add project-specific state, quick-reference data, or active constraints here (e.g., board status, feature flags, intentional quirks).
 
 ---
+
+*v1.0.12 — 2026-06-19*
+- Optimized `findSimilarCocktails` by removing redundant recipe detail API queries for candidate cocktails.
+- Optimized `fetchCompleteRecipes` to directly format and cache search results, eliminating sequential recipe lookup queries.
+- Enabled HTTP Keep-Alive for Axios requests to reuse TCP connections, reducing latency of remote API queries.
+
+*v1.0.11 — 2026-06-19*
+- Added optional `AGY_MODEL` environment variable support to configure the model parameter for Google Antigravity CLI (`agy`) invocation, defaulting to "Gemini 3.5 Flash (Low)".
 
 *v1.0.10 — 2026-06-19*
 - Folded pourover-gateway Python service into bar-assistant-mcp-server Node.js project.

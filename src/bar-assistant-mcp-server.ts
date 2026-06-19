@@ -844,7 +844,19 @@ export class BarAssistantMCPServer {
       if (cached) {
         results.push(this.formatCocktailResult(cached));
       } else {
-        uncachedCocktails.push(cocktail);
+        // If the cocktail object already has ingredients and instructions, we can format and cache it directly
+        const hasIngredients = cocktail.ingredients && cocktail.ingredients.length > 0;
+        const hasInstructions = cocktail.instructions && (
+          (typeof cocktail.instructions === 'string' && cocktail.instructions.trim().length > 0) ||
+          (Array.isArray(cocktail.instructions) && cocktail.instructions.length > 0)
+        );
+        
+        if (hasIngredients && hasInstructions) {
+          this.cacheManager.setCachedRecipe(cocktail.id, cocktail);
+          results.push(this.formatCocktailResult(cocktail));
+        } else {
+          uncachedCocktails.push(cocktail);
+        }
       }
     }
     
@@ -2381,7 +2393,8 @@ Returns detailed ingredient information including:
       });
       res.flushHeaders();
 
-      const agyProcess = spawn('agy', ['-p', query, '--dangerously-skip-permissions'], {
+      const model = process.env.AGY_MODEL || 'Gemini 3.5 Flash (Low)';
+      const agyProcess = spawn('agy', ['-p', query, '--dangerously-skip-permissions', '--model', model], {
         stdio: ['ignore', 'pipe', 'pipe'],
         env: {
           ...process.env,

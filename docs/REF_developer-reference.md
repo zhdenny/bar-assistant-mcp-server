@@ -44,6 +44,7 @@
 | `BAR_ASSISTANT_BAR_ID` | No | `1` | Bar ID context for queries |
 | `PORT` | No | `3001` | Server port used in SSE/gateway modes |
 | `MCP_SSE_TOKEN` | Yes (in SSE/gateway) | None | Token for client authentication in SSE and gateway modes |
+| `GEMINI_CONFIG_DIR` | Yes (if using Docker) | None | Host path to the `.gemini` configuration directory for agy access |
 
 ### Docker Deployment Configurations
 
@@ -52,7 +53,7 @@
 | Default SSE Port | `3001` | Port exposed by Docker container |
 | Image Name | `zhdenny/bar-assistant-mcp-server:latest` | Public Docker Registry image name |
 | Unraid Icon Label | `net.unraid.docker.icon` | Bound to `/mnt/user/appdata/bar-assistant/icon.png` |
-| Google Antigravity Volume | `/root/.gemini:/root/.gemini` | Mount config/credentials for agy execution |
+| Google Antigravity Volume | `${GEMINI_CONFIG_DIR}:/root/.gemini` | Mount host configuration/credentials directory for agy execution |
 
 ---
 

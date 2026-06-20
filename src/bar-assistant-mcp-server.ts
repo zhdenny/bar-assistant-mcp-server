@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 
+import { fileURLToPath } from 'url';
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { SSEServerTransport } from '@modelcontextprotocol/sdk/server/sse.js';
@@ -2213,6 +2214,20 @@ Returns detailed ingredient information including:
   }
 
   async run(): Promise<void> {
+    const expectedToken = process.env.MCP_SSE_TOKEN;
+    if (!expectedToken || expectedToken.trim() === '') {
+      console.error('❌ ERROR: MCP_SSE_TOKEN environment variable must be set.');
+      process.exit(1);
+    }
+
+    const tokenIndex = process.argv.indexOf('--token');
+    const tokenArg = tokenIndex !== -1 && tokenIndex + 1 < process.argv.length ? process.argv[tokenIndex + 1] : null;
+
+    if (!tokenArg || normalizeToken(tokenArg) !== normalizeToken(expectedToken)) {
+      console.error('❌ ERROR: Unauthorized. Missing or invalid --token argument.');
+      process.exit(1);
+    }
+
     const transport = new StdioServerTransport();
     await this.server.connect(transport);
     // Server is now running - no output to avoid interfering with MCP protocol
@@ -2426,12 +2441,20 @@ Returns detailed ingredient information including:
   }
 }
 
-// Start the server
-const server = new BarAssistantMCPServer();
+// Start the server if this file is run directly
+const isMainModule = process.argv[1] && (
+  process.argv[1] === fileURLToPath(import.meta.url) ||
+  process.argv[1].endsWith('bar-assistant-mcp-server.js') ||
+  process.argv[1].endsWith('bar-assistant-mcp-server.ts')
+);
 
-if (process.argv.includes('--sse')) {
-  const port = parseInt(process.env.PORT || '3001', 10);
-  server.runSSE(port).catch(console.error);
-} else {
-  server.run().catch(console.error);
+if (isMainModule) {
+  const server = new BarAssistantMCPServer();
+
+  if (process.argv.includes('--sse')) {
+    const port = parseInt(process.env.PORT || '3001', 10);
+    server.runSSE(port).catch(console.error);
+  } else {
+    server.run().catch(console.error);
+  }
 }

@@ -90,6 +90,8 @@ Code blocks, commit messages, PR descriptions: write normal always.
 - Optimized `findSimilarCocktails` by removing redundant recipe detail API queries for candidate cocktails.
 - Optimized `fetchCompleteRecipes` to directly format and cache search results, eliminating sequential recipe lookup queries.
 - Enabled HTTP Keep-Alive for Axios requests to reuse TCP connections, reducing latency of remote API queries.
+- Secured Stdio mode by requiring and validating a `--token` command-line argument that matches the `MCP_SSE_TOKEN` environment variable.
+- Prevented automatic server instantiation when importing codebase files (e.g. during test suite imports).
 
 *v1.0.11 — 2026-06-19*
 - Added optional `AGY_MODEL` environment variable support to configure the model parameter for Google Antigravity CLI (`agy`) invocation, defaulting to "Gemini 3.5 Flash (Low)".

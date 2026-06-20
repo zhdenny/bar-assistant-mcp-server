@@ -899,8 +899,8 @@ class BarAssistantTester {
                 allPassed = false;
             } else {
                 const output = res3.data.trim();
-                if (output !== '4') {
-                    console.error(`     ❌ Expected streamed output "4", got "${output}"`);
+                if (output !== '4' && output !== '4.') {
+                    console.error(`     ❌ Expected streamed output "4" or "4.", got "${output}"`);
                     allPassed = false;
                 } else {
                     console.log('     ✅ Valid query successfully executed and streamed back.');

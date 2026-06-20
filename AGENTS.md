@@ -1,10 +1,10 @@
-# Agent — Bar Assistant MCP Server (v1.0.12) — 2026-06-19
+# Agent — Bar Assistant MCP Server (v1.0.13) — 2026-06-20
 
 > **Strict Rule**: Read this file at every session start.
 
 ## Project Setup
 - **Project Name**: Bar Assistant MCP Server
-- **Version**: 1.0.12 — use bump script only, never manually edit
+- **Version**: 1.0.13 — use bump script only, never manually edit
 - **Status**: Active
 - **Tech Stack**: Node.js, TypeScript, Express, Axios, MCP SDK
 - **Context Anchors**: None
@@ -85,6 +85,12 @@ Code blocks, commit messages, PR descriptions: write normal always.
 > Add project-specific state, quick-reference data, or active constraints here (e.g., board status, feature flags, intentional quirks).
 
 ---
+
+*v1.0.13 — 2026-06-20*
+- Parameterized host `.gemini` path via `GEMINI_CONFIG_DIR` environment variable in `docker-compose.yml`.
+- Added `GEMINI_CONFIG_DIR` variable to `.env` and `.env.example` with explanatory comments.
+- Ignored `.gemini` folder in `.gitignore` and `.dockerignore`.
+- Updated gateway query test in `src/test/run-tests.ts` to accept model outputs ending with a period.
 
 *v1.0.12 — 2026-06-19*
 - Optimized `findSimilarCocktails` by removing redundant recipe detail API queries for candidate cocktails.

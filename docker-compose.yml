@@ -1,3 +1,4 @@
+---
 services:
   bar-assistant-mcp-server:
     image: zhdenny/bar-assistant-mcp-server:latest
@@ -9,8 +10,8 @@ services:
     env_file:
       - ./.env
     volumes:
-      # Mount the targeted .gemini configuration directory for agy access
-      - /root/.gemini:/root/.gemini
+      # Mount host's .gemini configuration directory for agy access (variable loaded from GEMINI_CONFIG_DIR in .env)
+      - ${GEMINI_CONFIG_DIR}:/root/.gemini
     labels:
       net.unraid.docker.icon: "/mnt/user/appdata/bar-assistant/icon.png"
     # Optionally, you can add a healthcheck
